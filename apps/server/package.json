@@ -1,0 +1,27 @@
+{
+  "name": "server",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.0",
+    "hono": "^4.9.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.17",
+    "@verse/eslint-config": "workspace:*",
+    "@verse/prettier-config": "workspace:*",
+    "@verse/tsconfig": "workspace:*",
+    "eslint": "^9.33.0",
+    "prettier": "^3.0.0",
+    "tsx": "^4.7.1",
+    "typescript": "^5.8.3"
+  },
+  "prettier": "@verse/prettier-config"
+}

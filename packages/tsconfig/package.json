@@ -1,0 +1,5 @@
+{
+  "name": "@verse/tsconfig",
+  "version": "1.0.0",
+  "files": ["*.json"]
+}
