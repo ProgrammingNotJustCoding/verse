@@ -29,6 +29,7 @@ lerna-debug.log*
 dist
 dist-ssr
 *.local
+target
 
 # Editor directories and files
 .idea
@@ -40,3 +41,4 @@ dist-ssr
 
 # Volumes
 redis-data
+

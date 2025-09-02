@@ -1,0 +1,16 @@
+[package]
+name = "ocr-worker"
+version = "0.1.0"
+
+[dependencies]
+shared = { path = "../../../crates/shared" }
+config = { path = "../../../crates/config" }
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+reqwest = { workspace = true }
+
+image = "0.24"
