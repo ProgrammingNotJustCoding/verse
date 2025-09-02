@@ -1,10 +1,12 @@
 pub mod db;
-pub mod ollama;
 pub mod redis;
+pub mod ollama;
+pub mod minio;
 
 pub use db::*;
-pub use ollama::*;
 pub use redis::*;
+pub use ollama::*;
+pub use minio::*;
 
 use serde::{Deserialize, Serialize};
 

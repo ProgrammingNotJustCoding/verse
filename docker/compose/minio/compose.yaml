@@ -1,0 +1,54 @@
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: verse-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./minio_data:/data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_CONSOLE_ADDRESS: ":9001"
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - verse-network
+
+  minio-setup:
+    image: minio/mc:latest
+    container_name: verse-minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    entrypoint: |
+      /bin/sh -c "
+      echo 'Waiting for MinIO to be ready...'
+      sleep 10
+
+      echo 'Setting up MinIO alias...'
+      mc alias set myminio http://minio:9000 minioadmin minioadmin123
+
+      echo 'Creating buckets...'
+      mc mb myminio/uploads --ignore-existing
+      mc mb myminio/processed --ignore-existing
+      mc mb myminio/thumbnails --ignore-existing
+      mc mb myminio/temp --ignore-existing
+
+      echo 'Setting bucket policies...'
+      mc anonymous set public myminio/processed
+      mc anonymous set public myminio/thumbnails
+
+      echo 'MinIO setup complete!'
+      "
+    networks:
+      - verse-network

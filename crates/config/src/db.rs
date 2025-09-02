@@ -32,7 +32,7 @@ impl DatabaseConfig {
             self.username, self.password, self.host, self.port, self.database
         )
     }
-    
+
     pub fn from_env() -> anyhow::Result<Self> {
         Ok(Self {
             host: std::env::var("DB_HOST").unwrap_or_else(|_| "localhost".to_string()),

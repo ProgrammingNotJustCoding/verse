@@ -25,15 +25,15 @@ impl OllamaConfig {
     pub fn api_url(&self) -> String {
         format!("{}/api", self.base_url)
     }
-    
+
     pub fn generate_url(&self) -> String {
         format!("{}/api/generate", self.base_url)
     }
-    
+
     pub fn chat_url(&self) -> String {
         format!("{}/api/chat", self.base_url)
     }
-    
+
     pub fn from_env() -> anyhow::Result<Self> {
         Ok(Self {
             base_url: std::env::var("OLLAMA_BASE_URL")
