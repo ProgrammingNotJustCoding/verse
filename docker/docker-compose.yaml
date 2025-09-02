@@ -1,0 +1,9 @@
+include:
+  - ./compose/coturn/compose.yaml
+  - ./compose/livekit/compose.yaml
+  - ./compose/postgres/compose.yaml
+
+networks:
+  verse-network:
+    driver: bridge
+    name: verse-network

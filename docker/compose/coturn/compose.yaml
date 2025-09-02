@@ -1,0 +1,36 @@
+services:
+  coturn:
+    image: coturn/coturn:latest
+    container_name: verse-coturn
+    restart: unless-stopped
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "5349:5349"
+      - "5349:5349/udp"
+      - "50000-50099:50000-50099/udp"
+    environment:
+      - TURN_USERNAME=verse
+      - TURN_PASSWORD=verse-secret
+      - TURN_REALM=verse.local
+    command: |
+      -n
+      -v
+      -r verse.local
+      -a
+      -u verse:verse-secret
+      -p 3478
+      -P 5349
+      --min-port=50000
+      --max-port=50099
+      --use-auth-secret
+      --static-auth-secret=verse-turn-secret
+      --realm=verse.local
+      --total-quota=100
+      --stale-nonce=600
+      --cert=/usr/local/etc/turn_server_cert.pem
+      --pkey=/usr/local/etc/turn_server_pkey.pem
+      --log-file=stdout
+      --simple-log
+    networks:
+      - verse-network
