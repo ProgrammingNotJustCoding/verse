@@ -8,3 +8,4 @@ networks:
   verse-network:
     driver: bridge
     name: verse-network
+    external: true

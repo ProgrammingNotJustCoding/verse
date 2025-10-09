@@ -23,6 +23,10 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - ./redis-data:/data
+      - redis-data:/data
     networks:
       - verse-network
+
+volumes:
+  redis-data:
+    driver: local
