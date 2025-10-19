@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     environment:
       - POSTGRES_USER=verse
-      - POSTGRES_PASSWORD=verse-secret
+      - POSTGRES_PASSWORD=verse_secret
       - POSTGRES_DB=verse_db
     ports:
       - "5432:5432"
