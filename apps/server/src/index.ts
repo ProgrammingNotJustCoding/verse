@@ -5,6 +5,7 @@ import { validateEnv, type Environment } from './config/env.ts'
 import { createDb } from './database/db.ts'
 import { createLogger } from './config/logger.ts'
 import { authRouter } from './api/routes.ts'
+import { cors } from 'hono/cors'
 
 type Bindings = Environment
 
@@ -27,6 +28,8 @@ if (typeof process !== 'undefined' && process.env.NODE_ENV) {
   globalLogger = createLogger(globalEnv)
   globalDb = createDb(globalEnv)
 }
+
+app.use(cors())
 
 app.use('*', async (c, next) => {
   const env = c.env || globalEnv!

@@ -1,8 +1,14 @@
 import React, { useState } from 'react'
 import { FaGithub, FaGoogle, FaEnvelope, FaLock, FaUser } from 'react-icons/fa'
+import { useNavigate } from 'react-router-dom'
+import toast, { Toaster } from 'react-hot-toast'
 
 import Button from '../common/Button'
 import Input from '../common/Input'
+import { signUp, login } from '../../services/auth.service'
+import { signUpValidator, loginValidator } from '../../validators/auth.validators'
+import { useUserStore } from '../../store/users'
+import { useValidate } from '../../hooks/useValidate'
 
 const AuthForm: React.FC = () => {
   const [isSignUp, setIsSignUp] = useState(false)
@@ -11,21 +17,54 @@ const AuthForm: React.FC = () => {
     email: '',
     password: '',
   })
+  const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string }>({})
+  const [loading, setLoading] = useState(false)
+  const navigate = useNavigate()
+  const setUser = useUserStore(state => state.setUser)
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    console.log('Form submitted:', formData)
-  }
+  const validator = isSignUp ? signUpValidator : loginValidator
+
+  const { validateField, validateForm } = useValidate(validator, setErrors, isSignUp, formData)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    })
+    setFormData({ ...formData, [e.target.name]: e.target.value })
+    validateField(e.target.name as 'name' | 'email' | 'password')
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!validateForm()) {
+      toast.error('Please fix the errors!', { style: { background: '#171717', color: '#ff8800' } })
+      return
+    }
+    setLoading(true)
+    try {
+      const res = isSignUp
+        ? await signUp({ name: formData.name, email: formData.email, password: formData.password })
+        : await login({ email: formData.email, password: formData.password })
+
+      if (res.error) {
+        const errorMessage =
+          typeof res.error === 'string'
+            ? res.error
+            : res.error.prettyMessage || res.error.message || 'An error occurred'
+        toast.error(errorMessage, { style: { background: '#171717', color: '#ff8800' } })
+      } else if (res.data?.token) {
+        setUser({ id: 0, name: formData.name, email: formData.email })
+        toast.success('Success!', { style: { background: '#171717', color: '#ff8800' } })
+        navigate('/dash')
+      }
+    } catch (error) {
+      console.error('Auth error:', error)
+      toast.error('Something went wrong!', { style: { background: '#171717', color: '#ff8800' } })
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <div className="h-full bg-neutral-950 p-12 flex flex-col justify-center">
+      <Toaster position="top-center" />
       <div className="max-w-md w-full mx-auto">
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">
@@ -77,7 +116,9 @@ const AuthForm: React.FC = () => {
                 onChange={handleChange}
                 className="pl-12"
                 required
+                onBlur={() => validateField('name')}
               />
+              {errors.name && <p className="text-xs text-orange-500 mt-1">{errors.name}</p>}
             </div>
           )}
 
@@ -91,7 +132,9 @@ const AuthForm: React.FC = () => {
               onChange={handleChange}
               className="pl-12"
               required
+              onBlur={() => validateField('email')}
             />
+            {errors.email && <p className="text-xs text-orange-500 mt-1">{errors.email}</p>}
           </div>
 
           <div className="relative">
@@ -104,7 +147,9 @@ const AuthForm: React.FC = () => {
               onChange={handleChange}
               className="pl-12"
               required
+              onBlur={() => validateField('password')}
             />
+            {errors.password && <p className="text-xs text-orange-500 mt-1">{errors.password}</p>}
           </div>
 
           {!isSignUp && (
@@ -118,8 +163,8 @@ const AuthForm: React.FC = () => {
             </div>
           )}
 
-          <Button type="submit" variant="primary" className="w-full">
-            {isSignUp ? 'Sign Up' : 'Sign In'}
+          <Button type="submit" variant="primary" className="w-full" disabled={loading}>
+            {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
           </Button>
         </form>
 
@@ -127,6 +172,7 @@ const AuthForm: React.FC = () => {
           <p className="text-gray-400 font-light">
             {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
             <button
+              type="button"
               onClick={() => setIsSignUp(!isSignUp)}
               className="text-secondary hover:text-orange-500 font-normal transition-colors"
             >
