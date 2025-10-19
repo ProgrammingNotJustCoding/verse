@@ -7,18 +7,31 @@
     "start": "node dist/index.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",
-    "hono": "^4.9.4"
+    "argon2": "^0.44.0",
+    "dotenv": "^17.2.3",
+    "drizzle-kit": "^0.31.5",
+    "drizzle-orm": "^0.44.6",
+    "hono": "^4.9.4",
+    "jsonwebtoken": "^9.0.2",
+    "pino": "^10.1.0",
+    "postgres": "^3.4.7",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.11.17",
     "@verse/eslint-config": "workspace:*",
     "@verse/prettier-config": "workspace:*",
     "@verse/tsconfig": "workspace:*",
+    "drizzle-zod": "^0.8.3",
     "eslint": "^9.33.0",
+    "pino-pretty": "^13.1.2",
     "prettier": "^3.0.0",
     "tsx": "^4.7.1",
     "typescript": "^5.8.3"

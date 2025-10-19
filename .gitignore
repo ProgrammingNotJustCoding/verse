@@ -38,7 +38,3 @@ target
 *.njsproj
 *.sln
 *.sw?
-
-# Volumes
-redis-data
-
