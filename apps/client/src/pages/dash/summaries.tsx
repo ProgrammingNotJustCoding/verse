@@ -1,0 +1,1 @@
+export default function SummariesPage() { return <div className="p-4">Summaries Page</div> }
