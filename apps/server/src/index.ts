@@ -4,14 +4,16 @@ import { Hono } from 'hono'
 import { validateEnv, type Environment } from './config/env.ts'
 import { createDb } from './database/db.ts'
 import { createLogger } from './config/logger.ts'
-import { authRouter } from './api/routes.ts'
+import { authRouter, participantRouter, roomRouter } from './api/routes.ts'
 import { cors } from 'hono/cors'
+import { createLivekitService, type LivekitService } from './services/livekit.service.ts'
 
 type Bindings = Environment
 
 type Variables = {
   logger: ReturnType<typeof createLogger>
   db: ReturnType<typeof createDb>
+  livekit: LivekitService
 }
 
 const app = new Hono<{
@@ -21,12 +23,14 @@ const app = new Hono<{
 
 let globalLogger: ReturnType<typeof createLogger> | null = null
 let globalDb: ReturnType<typeof createDb> | null = null
+let globalLivekit: LivekitService | null = null
 let globalEnv: Environment | null = null
 
 if (typeof process !== 'undefined' && process.env.NODE_ENV) {
   globalEnv = validateEnv(process.env)
   globalLogger = createLogger(globalEnv)
   globalDb = createDb(globalEnv)
+  globalLivekit = createLivekitService(globalEnv)
 }
 
 app.use(cors())
@@ -35,9 +39,11 @@ app.use('*', async (c, next) => {
   const env = c.env || globalEnv!
   const logger = globalLogger || createLogger(env)
   const db = globalDb || createDb(env)
+  const livekit = globalLivekit || createLivekitService(env)
 
   c.set('logger', logger)
   c.set('db', db)
+  c.set('livekit', livekit)
 
   logger.info({ method: c.req.method, url: c.req.url }, 'Request received')
 
@@ -55,6 +61,8 @@ app.get('/health', c => {
 })
 
 app.route('/auth', authRouter)
+app.route('/rooms', roomRouter)
+app.route('/participants', participantRouter)
 
 app.notFound(c => {
   const logger = c.get('logger') || globalLogger

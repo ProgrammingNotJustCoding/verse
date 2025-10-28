@@ -19,6 +19,7 @@
     "drizzle-orm": "^0.44.6",
     "hono": "^4.9.4",
     "jsonwebtoken": "^9.0.2",
+    "livekit-server-sdk": "^2.14.0",
     "pino": "^10.1.0",
     "postgres": "^3.4.7",
     "zod": "^4.1.12"
