@@ -9,18 +9,19 @@ services:
       - "5349:5349"
       - "5349:5349/udp"
       - "50000-50099:50000-50099/udp"
-    environment:
-      - TURN_USERNAME=verse
-      - TURN_PASSWORD=verse-secret
-      - TURN_REALM=verse.local
+    # environment:
+    #   - TURN_USERNAME=verse
+    #   - TURN_PASSWORD=verse-secret
+    #   - TURN_REALM=verse.local
     command: |
       -n
       -v
       -r verse.local
-      -a
-      -u verse:verse-secret
+      # Remove long-term auth flags
+      # -a
+      # -u verse:verse-secret
       -p 3478
-      -P 5349
+      --tls-listening-port 5349
       --min-port=50000
       --max-port=50099
       --use-auth-secret
@@ -34,7 +35,3 @@ services:
       --simple-log
     networks:
       - verse-network
-
-networks:
-  verse-network:
-    external: true

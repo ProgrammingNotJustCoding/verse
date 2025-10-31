@@ -1,5 +1,5 @@
 include:
-  # - ./compose/coturn/compose.yaml  # Not needed for local development
+  - ./compose/coturn/compose.yaml
   - ./compose/livekit/compose.yaml
   - ./compose/minio/compose.yaml
   - ./compose/postgres/compose.yaml

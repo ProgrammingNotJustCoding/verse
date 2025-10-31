@@ -16,3 +16,11 @@ redis:
 
 keys:
   verse-api-key: verse-api-secret-value-here-change-me
+
+turn:
+  enabled: true
+  domain: verse.local
+  secret: verse-turn-secret
+  host: coturn
+  port: 3478
+  tls_port: 5349
