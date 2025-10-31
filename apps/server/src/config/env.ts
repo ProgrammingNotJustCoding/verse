@@ -8,6 +8,9 @@ const envSchema = z.object({
   DATABASE_URL: z.string().default('postgres://verse:verse-secret@localhost:5432/verse_db'),
   JWT_SECRET: z.string().min(1),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
+  LIVEKIT_HOST: z.string().min(1).default('localhost:7880'),
+  LIVEKIT_API_KEY: z.string().min(1),
+  LIVEKIT_SECRET_KEY: z.string().min(1),
 })
 
 export type Environment = z.infer<typeof envSchema>

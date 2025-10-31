@@ -1,34 +1,16 @@
 port: 7880
+
+log_level: info
+
 rtc:
   tcp_port: 7881
-  port_range_start: 50100
-  port_range_end: 50199
+  port_range_start: 50000
+  port_range_end: 60000
   use_external_ip: true
 
 redis:
   address: redis:6379
 
-api_key: verse-api-key
-api_secret: verse-api-secret
+keys:
+  verse-api-key: verse-api-secret-value-here-change-me
 
-turn:
-  enabled: true
-  domain: localhost
-  tls_port: 5349
-  udp_port: 3478
-  username: verse
-  password: verse-secret
-
-webhook:
-  api_key: verse-webhook-key
-
-room:
-  auto_create: true
-  empty_timeout: 300
-  departure_timeout: 20
-
-logging:
-  level: info
-  pion_level: warn
-
-development: true

@@ -3,14 +3,13 @@ services:
     image: livekit/livekit-server:latest
     container_name: verse-livekit
     restart: unless-stopped
+    command: --config /etc/livekit.yaml
     ports:
       - "7880:7880"
       - "7881:7881"
       - "50100-50199:50100-50199/udp"
-    environment:
-      - LIVEKIT_CONFIG=/etc/livekit.yaml
     volumes:
-      - ./livekit.yaml:/etc/livekit.yaml
+      - ./livekit.yaml:/etc/livekit.yaml:ro,Z
     depends_on:
       - redis
     networks:

@@ -20,7 +20,7 @@ class UserRepository {
     return result[0]
   }
 
-  async getById(id: number): Promise<User | undefined> {
+  async getById(id: string): Promise<User | undefined> {
     const result = await this.db.select().from(users).where(eq(users.id, id))
     return result[0]
   }
@@ -31,12 +31,12 @@ class UserRepository {
     return result[0]
   }
 
-  async update(id: number, userData: Partial<NewUser>): Promise<User | undefined> {
+  async update(id: string, userData: Partial<NewUser>): Promise<User | undefined> {
     const result = await this.db.update(users).set(userData).where(eq(users.id, id)).returning()
     return result[0]
   }
 
-  async delete(id: number): Promise<boolean> {
+  async delete(id: string): Promise<boolean> {
     const result = await this.db.delete(users).where(eq(users.id, id)).returning()
     return result.length > 0
   }
