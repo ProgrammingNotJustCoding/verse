@@ -33,7 +33,7 @@ if (typeof process !== 'undefined' && process.env.NODE_ENV) {
   globalLivekit = createLivekitService(globalEnv)
 }
 
-app.use(cors())
+app.use(cors({ origin: 'http://localhost:5173' }))
 
 app.use('*', async (c, next) => {
   const env = c.env || globalEnv!

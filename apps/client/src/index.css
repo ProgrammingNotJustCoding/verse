@@ -59,7 +59,7 @@
   }
 
   .dark {
-    --background: oklch(0.2679 0.0036 106.6427);
+    --background: oklch(0.213 0.0078 95.4245);
     --foreground: oklch(0.8074 0.0142 93.0137);
     --card: oklch(0.2679 0.0036 106.6427);
     --card-foreground: oklch(0.9818 0.0054 95.0986);

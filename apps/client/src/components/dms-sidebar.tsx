@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Plus, Search, User } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 
 import { useDmsStore } from '@/store/dms'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -71,7 +71,7 @@ export function DmsSidebar({ onDmSelect }: { onDmSelect: () => void }) {
             </Avatar>
             <div className="flex-1 truncate">
               <p className="truncate text-sm">{dm.name}</p>
-              <p className="truncate text-xs text-muted-foreground">
+              <p className="truncate text-xs text-muted-foreground border-primary ">
                 {dm.messages.length > 0
                   ? dm.messages[dm.messages.length - 1].text
                   : 'No messages yet'}

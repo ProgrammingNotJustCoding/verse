@@ -12,6 +12,7 @@ import ActivityPage from './pages/dash/activity'
 import ChatPage from './pages/dash/chat'
 import TasksPage from './pages/dash/tasks'
 import SummariesPage from './pages/dash/summaries'
+import { ProtectedRoute } from './components/auth'
 
 const Router: React.FC = () => {
   return (
@@ -19,7 +20,14 @@ const Router: React.FC = () => {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/auth" element={<Auth />} />
-        <Route path="/dash" element={<DashboardLayout />}>
+        <Route
+          path="/dash"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<Dashboard />} />
           <Route path="activity" element={<ActivityPage />} />
           <Route path="chat" element={<ChatPage />} />

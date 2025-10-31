@@ -13,7 +13,19 @@ import {
 import { Label } from '@/components/ui/label'
 import { useDmsStore } from '@/store/dms'
 import { useGroupsStore } from '@/store/groups'
-import { Plus, Search, Video, Tag as TagIcon, X, Edit2, Trash2 } from 'lucide-react'
+import { Plus, Search, Video, Tag as TagIcon, X, Edit2, Trash2, PhoneCall } from 'lucide-react'
+import toast, { Toaster } from 'react-hot-toast'
+import { VideoRoom } from '@/components/room'
+import { roomService } from '@/services/room/room.service'
+
+// Debug logging
+const DEBUG = true
+const log = (...args: unknown[]) => {
+  if (DEBUG) console.log('[CallsPage]', ...args)
+}
+const error = (...args: unknown[]) => {
+  if (DEBUG) console.error('[CallsPage]', ...args)
+}
 
 type Call = {
   id: number
@@ -72,10 +84,12 @@ function CallCard({
   call,
   onEdit,
   onDelete,
+  onJoin,
 }: {
   call: Call
   onEdit: (call: Call) => void
   onDelete: (callId: number) => void
+  onJoin?: (call: Call) => void
 }) {
   const navigate = useNavigate()
   const { getDmByUserId, setActiveDm } = useDmsStore()
@@ -136,6 +150,11 @@ function CallCard({
           </p>
         </div>
         <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          {onJoin && call.date >= new Date() && (
+            <Button variant="default" size="icon" className="size-8" onClick={() => onJoin(call)}>
+              <Video className="size-4" />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" className="size-8" onClick={() => onEdit(call)}>
             <Edit2 className="size-4" />
           </Button>
@@ -160,6 +179,22 @@ export default function CallsPage() {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [editingCall, setEditingCall] = React.useState<Call | null>(null)
   const { groups } = useGroupsStore()
+
+  // LiveKit state
+  const [activeRoom, setActiveRoom] = React.useState<{
+    roomId: string
+    roomName: string
+    token: string
+    isAdmin: boolean
+  } | null>(null)
+  const [isCreatingRoom, setIsCreatingRoom] = React.useState(false)
+  const isLeavingRef = React.useRef(false)
+
+  const LIVEKIT_SERVER_URL = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
+
+  React.useEffect(() => {
+    log('LiveKit Server URL:', LIVEKIT_SERVER_URL)
+  }, [LIVEKIT_SERVER_URL])
 
   // Form state
   const [formTitle, setFormTitle] = React.useState('')
@@ -298,8 +333,146 @@ export default function CallsPage() {
       .sort((a, b) => b.date.getTime() - a.date.getTime()) // Descending - most recent first
   }, [filteredAndSortedCalls])
 
+  // Create and join a new room
+  const handleCreateAndJoinRoom = async () => {
+    if (!formTitle.trim()) {
+      toast.error('Please enter a room name', {
+        style: { background: '#171717', color: '#ff8800' },
+      })
+      return
+    }
+
+    log('Creating and joining room:', formTitle)
+    setIsCreatingRoom(true)
+    try {
+      // Create room
+      log('Step 1: Creating room...')
+      const createResponse = await roomService.createRoom({
+        name: formTitle,
+        maxParticipants: formType === 'group' ? 50 : 2,
+      })
+
+      const room = createResponse.data.room
+      log('Step 1 ✓: Room created:', room.id)
+
+      // Join room
+      log('Step 2: Joining room...')
+      const joinResponse = await roomService.joinRoom({
+        roomId: room.id,
+      })
+
+      const { token, participant } = joinResponse.data
+      log('Step 2 ✓: Joined room, token received, participant:', participant.id)
+
+      // Set active room
+      log('Step 3: Setting active room state')
+      setActiveRoom({
+        roomId: room.id,
+        roomName: room.name,
+        token,
+        isAdmin: participant.isAdmin,
+      })
+      isLeavingRef.current = false
+      log('Step 3 ✓: Active room set')
+
+      setIsDialogOpen(false)
+      resetForm()
+
+      toast.success(`Joined room: ${room.name}`, {
+        style: { background: '#171717', color: '#00ff00' },
+      })
+    } catch (err) {
+      error('Failed to create and join room:', err)
+      toast.error(err instanceof Error ? err.message : 'Failed to create room', {
+        style: { background: '#171717', color: '#ff8800' },
+      })
+    } finally {
+      setIsCreatingRoom(false)
+    }
+  }
+
+  // Leave room
+  const handleLeaveRoom = async () => {
+    if (!activeRoom) {
+      log('No active room to leave')
+      return
+    }
+
+    if (isLeavingRef.current) {
+      log('Already leaving room, skipping...')
+      return
+    }
+
+    log('Leaving room:', activeRoom.roomId)
+    isLeavingRef.current = true
+
+    try {
+      await roomService.leaveRoom(activeRoom.roomId)
+      log('✓ Successfully left room')
+      setActiveRoom(null)
+      isLeavingRef.current = false
+      toast.success('You have left the room', {
+        style: { background: '#171717', color: '#00ff00' },
+      })
+    } catch (err) {
+      error('Failed to leave room:', err)
+      // Clear active room anyway to prevent being stuck
+      setActiveRoom(null)
+      isLeavingRef.current = false
+    }
+  }
+
+  // End room (admin only)
+  const handleEndRoom = async () => {
+    if (!activeRoom) {
+      log('No active room to end')
+      return
+    }
+
+    if (isLeavingRef.current) {
+      log('Already ending room, skipping...')
+      return
+    }
+
+    log('Ending room:', activeRoom.roomId)
+    isLeavingRef.current = true
+
+    try {
+      await roomService.endRoom(activeRoom.roomId)
+      log('✓ Successfully ended room')
+      setActiveRoom(null)
+      isLeavingRef.current = false
+      toast.success('The room has been ended for all participants', {
+        style: { background: '#171717', color: '#00ff00' },
+      })
+    } catch (err) {
+      error('Failed to end room:', err)
+      toast.error(err instanceof Error ? err.message : 'Failed to end room', {
+        style: { background: '#171717', color: '#ff8800' },
+      })
+      setActiveRoom(null)
+      isLeavingRef.current = false
+    }
+  }
+
+  // If in active room, show video room
+  if (activeRoom) {
+    log('Rendering VideoRoom component')
+    return (
+      <VideoRoom
+        roomName={activeRoom.roomName}
+        token={activeRoom.token}
+        serverUrl={LIVEKIT_SERVER_URL}
+        isAdmin={activeRoom.isAdmin}
+        onLeave={handleLeaveRoom}
+        onEndRoom={activeRoom.isAdmin ? handleEndRoom : undefined}
+      />
+    )
+  }
+
   return (
     <div className="flex h-full flex-col gap-4 p-4">
+      <Toaster position="top-center" />
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Calls</h1>
         <div className="flex items-center gap-2">
@@ -307,12 +480,12 @@ export default function CallsPage() {
             <DialogTrigger asChild>
               <Button onClick={openAddDialog}>
                 <Plus className="mr-2 size-4" />
-                New Meeting
+                Schedule Meeting
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md">
               <DialogHeader>
-                <DialogTitle>{editingCall ? 'Edit Meeting' : 'New Meeting'}</DialogTitle>
+                <DialogTitle>{editingCall ? 'Edit Meeting' : 'Schedule Meeting'}</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
@@ -423,6 +596,55 @@ export default function CallsPage() {
               </form>
             </DialogContent>
           </Dialog>
+
+          {/* Quick join room button */}
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="default">
+                <PhoneCall className="mr-2 size-4" />
+                Start Call Now
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Start Instant Call</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="quickRoomName">Room Name *</Label>
+                  <Input
+                    id="quickRoomName"
+                    value={formTitle}
+                    onChange={e => setFormTitle(e.target.value)}
+                    placeholder="Enter room name"
+                    disabled={isCreatingRoom}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="quickType">Type</Label>
+                  <select
+                    id="quickType"
+                    value={formType}
+                    onChange={e => setFormType(e.target.value as 'group' | 'personal')}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                    disabled={isCreatingRoom}
+                  >
+                    <option value="group">Group Call</option>
+                    <option value="personal">1-on-1 Call</option>
+                  </select>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    onClick={handleCreateAndJoinRoom}
+                    disabled={isCreatingRoom || !formTitle.trim()}
+                  >
+                    {isCreatingRoom ? 'Creating...' : 'Start Call'}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </header>
 
@@ -474,6 +696,12 @@ export default function CallsPage() {
                   call={call}
                   onEdit={openEditDialog}
                   onDelete={handleDeleteCall}
+                  onJoin={() => {
+                    // Set form values and trigger quick join
+                    setFormTitle(call.title)
+                    setFormType(call.type)
+                    handleCreateAndJoinRoom()
+                  }}
                 />
               ))
             ) : (

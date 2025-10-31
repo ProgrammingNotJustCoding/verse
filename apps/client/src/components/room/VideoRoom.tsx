@@ -1,0 +1,407 @@
+import { useEffect, useRef, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import {
+  Video,
+  VideoOff,
+  Mic,
+  MicOff,
+  MonitorUp,
+  PhoneOff,
+  Settings,
+  Users,
+  MoreVertical,
+  AlertCircle,
+} from 'lucide-react'
+import { ParticipantVideo } from './ParticipantVideo'
+import { useLiveKit } from '@/hooks/useLiveKit'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { cn } from '@/lib/utils'
+
+// Debug logging
+const DEBUG = true
+const log = (...args: unknown[]) => {
+  if (DEBUG) console.log('[VideoRoom]', ...args)
+}
+const logError = (...args: unknown[]) => {
+  if (DEBUG) console.error('[VideoRoom]', ...args)
+}
+
+interface VideoRoomProps {
+  roomName: string
+  token: string
+  serverUrl: string
+  isAdmin?: boolean
+  onLeave: () => void
+  onEndRoom?: () => void
+}
+
+export function VideoRoom({
+  roomName,
+  token,
+  serverUrl,
+  isAdmin = false,
+  onLeave,
+  onEndRoom,
+}: VideoRoomProps) {
+  const {
+    isConnecting,
+    isConnected,
+    participants,
+    isCameraEnabled,
+    isMicrophoneEnabled,
+    error,
+    connect,
+    disconnect,
+    toggleCamera,
+    toggleMicrophone,
+    toggleScreenShare,
+    getVideoElement,
+  } = useLiveKit({
+    serverUrl,
+    onDisconnected: onLeave,
+    onError: err => {
+      console.error('LiveKit error:', err)
+    },
+  })
+
+  const [isScreenSharing, setIsScreenSharing] = useState(false)
+  const [showParticipantList, setShowParticipantList] = useState(false)
+  const hasConnectedRef = useRef(false)
+
+  useEffect(() => {
+    // Prevent multiple connections on remount
+    if (hasConnectedRef.current) {
+      log('Already connected, skipping mount...')
+      return
+    }
+
+    log('VideoRoom mounted:', { roomName, serverUrl: serverUrl.substring(0, 30) + '...' })
+    log('Token preview:', token.substring(0, 20) + '...')
+
+    // Check environment
+    if (!serverUrl) {
+      logError('⚠️ CRITICAL: serverUrl is empty! Set VITE_LIVEKIT_URL in .env')
+      return
+    }
+
+    if (!token) {
+      logError('⚠️ CRITICAL: token is empty! Backend should provide valid token')
+      return
+    }
+
+    log('Environment check passed, connecting...')
+    hasConnectedRef.current = true
+    connect(token)
+
+    return () => {
+      log('VideoRoom unmounting, disconnecting...')
+      hasConnectedRef.current = false
+      disconnect()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleRetry = () => {
+    log('Retry button clicked, reconnecting...')
+    hasConnectedRef.current = false
+    connect(token)
+  }
+
+  const handleLeave = async () => {
+    await disconnect()
+    onLeave()
+  }
+
+  const handleEndRoom = async () => {
+    await disconnect()
+    onEndRoom?.()
+  }
+
+  const handleToggleScreenShare = async () => {
+    await toggleScreenShare()
+    setIsScreenSharing(!isScreenSharing)
+  }
+
+  if (isConnecting) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="mb-4 inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+          <p className="text-lg font-medium">Connecting to room...</p>
+          <p className="text-sm text-muted-foreground">{roomName}</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    const isWebRTCError =
+      error.includes('could not establish pc connection') || error.includes('ICE')
+
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="max-w-2xl rounded-lg border bg-card p-6">
+          <div className="mb-4 flex items-center gap-2 text-destructive">
+            <AlertCircle className="h-8 w-8" />
+            <h2 className="text-xl font-semibold">Connection Error</h2>
+          </div>
+
+          <p className="mb-4 text-sm text-muted-foreground">{error}</p>
+
+          {isWebRTCError && (
+            <div className="mb-4 rounded-md border border-orange-500/20 bg-orange-500/10 p-4">
+              <h3 className="mb-2 font-semibold text-orange-500">
+                ⚠️ Cannot Connect to LiveKit Server
+              </h3>
+              <p className="mb-2 text-sm text-muted-foreground">
+                The WebRTC connection failed. This usually means:
+              </p>
+              <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
+                <li>
+                  <strong>LiveKit server is NOT running</strong> (most common)
+                </li>
+                <li>Wrong server URL in environment variables</li>
+                <li>Firewall blocking ports 7880-7882</li>
+              </ul>
+
+              <div className="mt-3 rounded bg-background/50 p-3 font-mono text-xs">
+                <p className="mb-1 font-semibold">Current Configuration:</p>
+                <p>Server URL: {serverUrl}</p>
+                <p>Room: {roomName}</p>
+              </div>
+
+              <div className="mt-3 rounded bg-red-500/10 border border-red-500/20 p-3 text-sm">
+                <p className="font-semibold text-red-500 mb-2">🔧 How to Fix:</p>
+                <div className="space-y-2 text-muted-foreground">
+                  <div>
+                    <p className="font-semibold">Step 1: Start LiveKit Server</p>
+                    <div className="ml-4 mt-1 rounded bg-background/80 p-2 font-mono text-xs">
+                      <p>docker run --rm -p 7880:7880 \</p>
+                      <p className="ml-2">-e LIVEKIT_KEYS="devkey: secret" \</p>
+                      <p className="ml-2">livekit/livekit-server</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-semibold">Step 2: Verify .env file</p>
+                    <div className="ml-4 mt-1 rounded bg-background/80 p-2 font-mono text-xs">
+                      <p>VITE_LIVEKIT_URL=ws://localhost:7880</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-semibold">Step 3: Restart dev server</p>
+                    <p className="ml-4 text-xs">Kill and restart: pnpm dev</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <Button onClick={handleRetry} variant="default">
+              Try Again
+            </Button>
+            <Button onClick={onLeave} variant="outline">
+              Back to Calls
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isConnected) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <p className="text-lg font-medium">Disconnected</p>
+          <Button onClick={onLeave} className="mt-4">
+            Back to Calls
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const localParticipant = participants.find(p => p.isLocal)
+  const remoteParticipants = participants.filter(p => !p.isLocal)
+
+  return (
+    <div className="flex h-screen flex-col bg-background">
+      {/* Header */}
+      <div className="border-b bg-card px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-semibold">{roomName}</h1>
+            <Badge variant="secondary">
+              <Users className="mr-1 h-3 w-3" />
+              {participants.length}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowParticipantList(!showParticipantList)}
+            >
+              <Users className="h-5 w-5" />
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <MoreVertical className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem>
+                  <Settings className="mr-2 h-4 w-4" />
+                  Settings
+                </DropdownMenuItem>
+                {isAdmin && (
+                  <DropdownMenuItem onClick={handleEndRoom} className="text-destructive">
+                    <PhoneOff className="mr-2 h-4 w-4" />
+                    End Room for All
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </div>
+
+      {/* Main video area */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Video grid */}
+        <div className="flex-1 p-4">
+          {participants.length === 0 ? (
+            <div className="flex h-full items-center justify-center">
+              <div className="text-center text-muted-foreground">
+                <Users className="mx-auto mb-2 h-12 w-12" />
+                <p>No participants yet</p>
+              </div>
+            </div>
+          ) : (
+            <div
+              className={cn(
+                'grid h-full gap-4',
+                participants.length === 1 && 'grid-cols-1',
+                participants.length === 2 && 'grid-cols-2',
+                participants.length >= 3 && participants.length <= 4 && 'grid-cols-2 grid-rows-2',
+                participants.length >= 5 && participants.length <= 9 && 'grid-cols-3 grid-rows-3',
+                participants.length >= 10 && 'grid-cols-4'
+              )}
+            >
+              {/* Local participant */}
+              {localParticipant && (
+                <ParticipantVideo
+                  identity={localParticipant.identity}
+                  name={localParticipant.name || 'You'}
+                  videoTrack={localParticipant.videoTrack}
+                  audioTrack={localParticipant.audioTrack}
+                  isSpeaking={localParticipant.isSpeaking}
+                  isMuted={!isMicrophoneEnabled}
+                  isVideoOff={!isCameraEnabled}
+                  isLocal={true}
+                  getVideoElement={() => getVideoElement(localParticipant.identity)}
+                />
+              )}
+
+              {/* Remote participants */}
+              {remoteParticipants.map(participant => (
+                <ParticipantVideo
+                  key={participant.identity}
+                  identity={participant.identity}
+                  name={participant.name || participant.identity}
+                  videoTrack={participant.videoTrack}
+                  audioTrack={participant.audioTrack}
+                  isSpeaking={participant.isSpeaking}
+                  isLocal={false}
+                  getVideoElement={() => getVideoElement(participant.identity)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Participant list sidebar */}
+        {showParticipantList && (
+          <div className="w-64 border-l bg-card p-4">
+            <h3 className="mb-4 font-semibold">Participants ({participants.length})</h3>
+            <div className="space-y-2">
+              {participants.map(participant => (
+                <div
+                  key={participant.identity}
+                  className="flex items-center gap-2 rounded-lg border bg-background p-2"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20">
+                    <Users className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">
+                      {participant.name}
+                      {participant.isLocal && ' (You)'}
+                    </p>
+                  </div>
+                  {participant.isSpeaking && (
+                    <div className="h-2 w-2 animate-pulse rounded-full bg-green-500"></div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Control bar */}
+      <div className="border-t bg-card px-4 py-4">
+        <div className="flex items-center justify-center gap-2">
+          {/* Microphone toggle */}
+          <Button
+            variant={isMicrophoneEnabled ? 'default' : 'destructive'}
+            size="icon"
+            className="h-12 w-12 rounded-full"
+            onClick={toggleMicrophone}
+          >
+            {isMicrophoneEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+          </Button>
+
+          {/* Camera toggle */}
+          <Button
+            variant={isCameraEnabled ? 'default' : 'destructive'}
+            size="icon"
+            className="h-12 w-12 rounded-full"
+            onClick={toggleCamera}
+          >
+            {isCameraEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
+          </Button>
+
+          {/* Screen share toggle */}
+          <Button
+            variant={isScreenSharing ? 'secondary' : 'outline'}
+            size="icon"
+            className="h-12 w-12 rounded-full"
+            onClick={handleToggleScreenShare}
+          >
+            <MonitorUp className="h-5 w-5" />
+          </Button>
+
+          {/* Leave button */}
+          <Button
+            variant="destructive"
+            size="lg"
+            className="ml-4 rounded-full"
+            onClick={handleLeave}
+          >
+            <PhoneOff className="mr-2 h-5 w-5" />
+            Leave
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}

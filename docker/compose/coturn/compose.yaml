@@ -34,3 +34,7 @@ services:
       --simple-log
     networks:
       - verse-network
+
+networks:
+  verse-network:
+    external: true
