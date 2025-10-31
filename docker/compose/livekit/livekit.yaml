@@ -10,17 +10,15 @@ rtc:
   use_external_ip: false
   # Force the node to advertise localhost as its IP
   node_ip: 127.0.0.1
+  turn_servers:
+    - host: coturn
+      port: 3478
+      protocol: udp  # Use 'tls' if forcing TLS on 5349; 'udp' for standard TURN
+      username: ""  # Empty for shared secret auth
+      credential: verse-turn-secret
 
 redis:
   address: redis:6379
 
 keys:
   verse-api-key: verse-api-secret-value-here-change-me
-
-turn:
-  enabled: true
-  domain: verse.local
-  secret: verse-turn-secret
-  host: coturn
-  port: 3478
-  tls_port: 5349
