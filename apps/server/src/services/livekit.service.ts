@@ -32,7 +32,7 @@ export const createLivekitService = (env: Environment) => {
     await roomService.removeParticipant(roomName, identity)
   }
 
-  const generateToken = (
+  const generateToken = async (
     roomName: string,
     participantIdentity: string,
     participantName: string
@@ -44,7 +44,7 @@ export const createLivekitService = (env: Environment) => {
 
     at.addGrant({ roomJoin: true, room: roomName, canPublish: true, canSubscribe: true })
 
-    return at.toJwt()
+    return await at.toJwt()
   }
 
   return {

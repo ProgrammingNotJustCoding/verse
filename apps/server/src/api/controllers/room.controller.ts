@@ -114,7 +114,7 @@ export const joinRoom = async (c: Context) => {
     }
 
     const identity = `${userId}_${Date.now()}`
-    const token = livekit.generateToken(room.name, identity, user.name)
+    const token = await livekit.generateToken(room.name, identity, user.name)
 
     const participant = await participantRepository(db).create({
       roomId: room.id,
