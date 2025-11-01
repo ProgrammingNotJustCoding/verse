@@ -46,7 +46,7 @@ const initialCallsData: Call[] = [
       { id: '2', name: 'Alice' },
       { id: '3', name: 'Bob' },
     ],
-    date: new Date(new Date().setDate(new Date().getDate() + 1)),
+    date: new Date(new Date().setDate(new Date().getDate() + 1)), 
     duration: '15 min',
     tags: ['daily', 'team'],
   },
@@ -60,7 +60,7 @@ const initialCallsData: Call[] = [
       { id: '5', name: 'David' },
       { id: '6', name: 'Eve' },
     ],
-    date: new Date(),
+    date: new Date(), 
     duration: '45 min',
     tags: ['project', 'kickoff', 'important'],
   },
@@ -72,7 +72,7 @@ const initialCallsData: Call[] = [
       { id: 'you', name: 'You' },
       { id: '7', name: 'Sarah' },
     ],
-    date: new Date(new Date().setDate(new Date().getDate() - 1)),
+    date: new Date(new Date().setDate(new Date().getDate() - 1)), 
     duration: '30 min',
     tags: ['1:1', 'feedback'],
   },
@@ -93,7 +93,7 @@ function CallCard({
   const { getDmByUserId, setActiveDm } = useDmsStore()
 
   const handleParticipantClick = (participantId: string) => {
-    if (participantId === 'you') return
+    if (participantId === 'you') return 
     const dm = getDmByUserId(participantId)
     if (dm) {
       setActiveDm(dm)
@@ -181,6 +181,7 @@ export default function CallsPage() {
 
   const [isCreatingRoom, setIsCreatingRoom] = React.useState(false)
 
+  
   const [formTitle, setFormTitle] = React.useState('')
   const [formType, setFormType] = React.useState<'group' | 'personal'>('personal')
   const [formGroupId, setFormGroupId] = React.useState('')
@@ -241,7 +242,7 @@ export default function CallsPage() {
 
     const dateTime = new Date(`${formDate}T${formTime}`)
 
-    if (editingCall) {
+    if (editingCall) {      
       setCalls(
         calls.map(call =>
           call.id === editingCall.id
@@ -258,6 +259,7 @@ export default function CallsPage() {
         )
       )
     } else {
+      
       const newCall: Call = {
         id: Date.now(),
         title: formTitle,
@@ -306,15 +308,16 @@ export default function CallsPage() {
   const upcomingCalls = React.useMemo(() => {
     return filteredAndSortedCalls
       .filter(call => call.date >= new Date())
-      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .sort((a, b) => a.date.getTime() - b.date.getTime()) 
   }, [filteredAndSortedCalls])
 
   const pastCalls = React.useMemo(() => {
     return filteredAndSortedCalls
       .filter(call => call.date < new Date())
-      .sort((a, b) => b.date.getTime() - a.date.getTime())
+      .sort((a, b) => b.date.getTime() - a.date.getTime()) 
   }, [filteredAndSortedCalls])
 
+  
   const handleCreateAndJoinRoom = async () => {
     if (!formTitle.trim()) {
       toast.error('Please enter a room name', {
@@ -326,6 +329,7 @@ export default function CallsPage() {
     log('Creating and joining room:', formTitle)
     setIsCreatingRoom(true)
     try {
+      
       log('Step 1: Creating room...')
       const createResponse = await roomService.createRoom({
         name: formTitle,
@@ -341,7 +345,7 @@ export default function CallsPage() {
       toast.success(`Room created: ${room.name}`, {
         style: { background: '#171717', color: '#00ff00' },
       })
-
+      
       log('Navigating to call page:', `/call/${room.meetingId}`)
       navigate(`/call/${room.meetingId}`)
     } catch (err) {
@@ -353,7 +357,7 @@ export default function CallsPage() {
       setIsCreatingRoom(false)
     }
   }
-
+  
   const handleJoinCall = (call: Call) => {
     log('Joining existing call:', call.title)
     setFormTitle(call.title)

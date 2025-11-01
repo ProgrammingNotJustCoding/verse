@@ -74,6 +74,83 @@ app.route('/auth', authRouter)
 app.route('/rooms', roomRouter)
 app.route('/participants', participantRouter)
 
+// STT Agent control endpoints
+app.post('/stt/join/:roomName', async c => {
+  const logger = c.get('logger')
+  const roomName = c.req.param('roomName')
+
+  if (!globalSTTAgent) {
+    logger.error('STT Agent not initialized')
+    return c.json({ status: 500, message: 'STT Agent not available' }, 500)
+  }
+
+  try {
+    await globalSTTAgent.joinRoom(roomName)
+    logger.info({ roomName }, 'STT Agent joined room')
+    return c.json({ status: 200, message: 'STT Agent joined room', roomName })
+  } catch (err) {
+    logger.error({ err, roomName }, 'Failed to join room with STT Agent')
+    return c.json({ status: 500, message: 'Failed to join room' }, 500)
+  }
+})
+
+app.post('/stt/leave/:roomName', async c => {
+  const logger = c.get('logger')
+  const roomName = c.req.param('roomName')
+
+  if (!globalSTTAgent) {
+    logger.error('STT Agent not initialized')
+    return c.json({ status: 500, message: 'STT Agent not available' }, 500)
+  }
+
+  try {
+    await globalSTTAgent.leaveRoom(roomName)
+    logger.info({ roomName }, 'STT Agent left room')
+    return c.json({ status: 200, message: 'STT Agent left room', roomName })
+  } catch (err) {
+    logger.error({ err, roomName }, 'Failed to leave room with STT Agent')
+    return c.json({ status: 500, message: 'Failed to leave room' }, 500)
+  }
+})
+
+app.get('/stt/status', async c => {
+  const logger = c.get('logger')
+
+  if (!globalSTTAgent) {
+    logger.error('STT Agent not initialized')
+    return c.json({ status: 500, message: 'STT Agent not available' }, 500)
+  }
+
+  const activeSessions = globalSTTAgent.getActiveSessions()
+  return c.json({
+    status: 200,
+    active: true,
+    activeSessions,
+    sessionCount: activeSessions.length,
+  })
+})
+
+// Webhook endpoint for LiveKit events (optional - for automatic joining)
+app.post('/livekit/webhook', async c => {
+  const logger = c.get('logger')
+
+  try {
+    const event = await c.req.json()
+    logger.info({ event: event.event }, 'LiveKit webhook received')
+
+    // Handle participant data messages for transcription control
+    if (event.event === 'participant_joined') {
+      const roomName = event.room?.name
+      logger.info({ roomName, participant: event.participant?.identity }, 'Participant joined')
+    }
+
+    return c.json({ status: 200, message: 'Webhook processed' })
+  } catch (err) {
+    logger.error({ err }, 'Error processing webhook')
+    return c.json({ status: 500, message: 'Error processing webhook' }, 500)
+  }
+})
+
 app.notFound(c => {
   const logger = c.get('logger')
   logger?.warn({ method: c.req.method, url: c.req.url }, 'Route not found')
@@ -90,4 +167,26 @@ if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
       console.log(`🚀 Server is running on http://localhost:${info.port}`)
     }
   )
+
+  process.on('SIGINT', async () => {
+    console.log('\n🛑 Shutting down server...')
+    if (globalCleanup) {
+      globalCleanup.stop()
+    }
+    if (globalSTTAgent) {
+      await globalSTTAgent.stop()
+    }
+    process.exit(0)
+  })
+
+  process.on('SIGTERM', async () => {
+    console.log('\n🛑 Shutting down server...')
+    if (globalCleanup) {
+      globalCleanup.stop()
+    }
+    if (globalSTTAgent) {
+      await globalSTTAgent.stop()
+    }
+    process.exit(0)
+  })
 }
