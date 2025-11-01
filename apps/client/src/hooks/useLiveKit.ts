@@ -39,6 +39,33 @@ export interface ParticipantInfo {
   screenShareIdentity?: string // The identity of the participant sharing
 }
 
+export interface ChatMessage {
+  id: string
+  participantIdentity: string
+  participantName: string
+  message: string
+  timestamp: number
+  isLocal: boolean
+  isSystem?: boolean
+}
+
+export interface Bookmark {
+  id: string
+  timestamp: number
+  meetingTime: number
+  message: string
+  createdAt: number
+}
+
+export interface Transcription {
+  id: string
+  participantIdentity: string
+  participantName: string
+  text: string
+  isFinal: boolean
+  timestamp: number
+}
+
 export function useLiveKit(options: UseLiveKitOptions) {
   const { serverUrl, onDisconnected, onError } = options
 
@@ -53,6 +80,9 @@ export function useLiveKit(options: UseLiveKitOptions) {
   const [isCameraEnabled, setIsCameraEnabled] = useState(false)
   const [isMicrophoneEnabled, setIsMicrophoneEnabled] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
+  const [roomCreatedAt, setRoomCreatedAt] = useState<string | null>(null)
 
   // Update participants list
   const updateParticipants = useCallback(() => {
@@ -202,10 +232,34 @@ export function useLiveKit(options: UseLiveKitOptions) {
           )
           .on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
             log('Participant connected:', participant.identity)
+
+            // Add system message for participant join
+            const systemMessage: ChatMessage = {
+              id: `system-join-${Date.now()}-${participant.identity}`,
+              participantIdentity: 'system',
+              participantName: 'System',
+              message: `${participant.name || participant.identity} joined the call`,
+              timestamp: Date.now(),
+              isLocal: false,
+              isSystem: true,
+            }
+            setChatMessages(prev => [...prev, systemMessage])
             updateParticipants()
           })
           .on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
             log('Participant disconnected:', participant.identity)
+
+            // Add system message for participant leave
+            const systemMessage: ChatMessage = {
+              id: `system-leave-${Date.now()}-${participant.identity}`,
+              participantIdentity: 'system',
+              participantName: 'System',
+              message: `${participant.name || participant.identity} left the call`,
+              timestamp: Date.now(),
+              isLocal: false,
+              isSystem: true,
+            }
+            setChatMessages(prev => [...prev, systemMessage])
             updateParticipants()
           })
           .on(RoomEvent.ActiveSpeakersChanged, () => {
@@ -213,10 +267,38 @@ export function useLiveKit(options: UseLiveKitOptions) {
           })
           .on(RoomEvent.LocalTrackPublished, (publication: LocalTrackPublication) => {
             log('Local track published:', publication.kind)
+
+            // Announce screen share start
+            if (publication.source === Track.Source.ScreenShare) {
+              const systemMessage: ChatMessage = {
+                id: `system-screenshare-start-${Date.now()}-local`,
+                participantIdentity: 'system',
+                participantName: 'System',
+                message: 'You started sharing your screen',
+                timestamp: Date.now(),
+                isLocal: false,
+                isSystem: true,
+              }
+              setChatMessages(prev => [...prev, systemMessage])
+            }
             updateParticipants()
           })
           .on(RoomEvent.LocalTrackUnpublished, (publication: LocalTrackPublication) => {
             log('Local track unpublished:', publication.kind)
+
+            // Announce screen share stop
+            if (publication.source === Track.Source.ScreenShare) {
+              const systemMessage: ChatMessage = {
+                id: `system-screenshare-stop-${Date.now()}-local`,
+                participantIdentity: 'system',
+                participantName: 'System',
+                message: 'You stopped sharing your screen',
+                timestamp: Date.now(),
+                isLocal: false,
+                isSystem: true,
+              }
+              setChatMessages(prev => [...prev, systemMessage])
+            }
             updateParticipants()
           })
           .on(RoomEvent.Disconnected, reason => {
@@ -241,6 +323,77 @@ export function useLiveKit(options: UseLiveKitOptions) {
           })
           .on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
             log('Connection quality changed:', quality, participant.identity)
+          })
+          .on(
+            RoomEvent.TrackPublished,
+            (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+              log('Remote track published:', publication.source, participant.identity)
+
+              // Announce remote screen share start (local is handled by LocalTrackPublished)
+              if (
+                publication.source === Track.Source.ScreenShare &&
+                participant.identity !== room.localParticipant.identity
+              ) {
+                const systemMessage: ChatMessage = {
+                  id: `system-screenshare-start-${Date.now()}-${participant.identity}`,
+                  participantIdentity: 'system',
+                  participantName: 'System',
+                  message: `${participant.name || participant.identity} started sharing their screen`,
+                  timestamp: Date.now(),
+                  isLocal: false,
+                  isSystem: true,
+                }
+                setChatMessages(prev => [...prev, systemMessage])
+              }
+              updateParticipants()
+            }
+          )
+          .on(
+            RoomEvent.TrackUnpublished,
+            (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+              log('Remote track unpublished:', publication.source, participant.identity)
+
+              // Announce remote screen share stop (local is handled by LocalTrackUnpublished)
+              if (
+                publication.source === Track.Source.ScreenShare &&
+                participant.identity !== room.localParticipant.identity
+              ) {
+                const systemMessage: ChatMessage = {
+                  id: `system-screenshare-stop-${Date.now()}-${participant.identity}`,
+                  participantIdentity: 'system',
+                  participantName: 'System',
+                  message: `${participant.name || participant.identity} stopped sharing their screen`,
+                  timestamp: Date.now(),
+                  isLocal: false,
+                  isSystem: true,
+                }
+                setChatMessages(prev => [...prev, systemMessage])
+              }
+              updateParticipants()
+            }
+          )
+          .on(RoomEvent.DataReceived, (payload, participant) => {
+            const decoder = new TextDecoder()
+            const data = decoder.decode(payload)
+
+            try {
+              const parsed = JSON.parse(data)
+
+              if (parsed.type === 'chat') {
+                const chatMessage: ChatMessage = {
+                  id: `${Date.now()}-${participant?.identity || 'unknown'}`,
+                  participantIdentity: participant?.identity || 'unknown',
+                  participantName: participant?.name || participant?.identity || 'Unknown',
+                  message: parsed.message,
+                  timestamp: Date.now(),
+                  isLocal: false,
+                }
+                log('Chat message received:', chatMessage)
+                setChatMessages(prev => [...prev, chatMessage])
+              }
+            } catch (err) {
+              logError('Failed to parse data packet:', err)
+            }
           })
 
         // Connect to room
@@ -494,5 +647,206 @@ export function useLiveKit(options: UseLiveKitOptions) {
     toggleScreenShare,
     getVideoElement,
     getAudioElement,
+    chatMessages,
+    bookmarks,
+    roomCreatedAt,
+    setRoomCreatedAt,
+    addSystemMessage: useCallback((message: string) => {
+      const systemMessage: ChatMessage = {
+        id: `system-${Date.now()}`,
+        participantIdentity: 'system',
+        participantName: 'System',
+        message,
+        timestamp: Date.now(),
+        isLocal: false,
+        isSystem: true,
+      }
+      setChatMessages(prev => [...prev, systemMessage])
+    }, []),
+    addBookmark: useCallback(
+      (message: string) => {
+        if (!roomCreatedAt) return
+
+        const roomStartTime = new Date(roomCreatedAt).getTime()
+        const currentTime = Date.now()
+        const meetingElapsed = Math.floor((currentTime - roomStartTime) / 1000)
+
+        const bookmark: Bookmark = {
+          id: `bookmark-${Date.now()}`,
+          timestamp: currentTime,
+          meetingTime: meetingElapsed,
+          message,
+          createdAt: currentTime,
+        }
+
+        setBookmarks(prev => [...prev, bookmark])
+        log('Bookmark added:', bookmark)
+        return bookmark
+      },
+      [roomCreatedAt]
+    ),
+    sendChatMessage: useCallback(
+      async (message: string) => {
+        const room = roomRef.current
+        if (!room) {
+          logError('Cannot send chat: no room')
+          return
+        }
+
+        try {
+          // Handle commands (messages starting with /)
+          if (message.startsWith('/')) {
+            const [command, ...args] = message.slice(1).split(' ')
+            const commandLower = command.toLowerCase()
+
+            if (commandLower === 'help') {
+              const helpMessage = `Available commands:
+/help - Show this help message
+/bookmark <message> - Save a timestamped bookmark
+/bookmarks - List all your bookmarks
+
+Commands are private and only visible to you.`
+
+              const systemMessage: ChatMessage = {
+                id: `system-${Date.now()}`,
+                participantIdentity: 'system',
+                participantName: 'System',
+                message: helpMessage,
+                timestamp: Date.now(),
+                isLocal: false,
+                isSystem: true,
+              }
+              setChatMessages(prev => [...prev, systemMessage])
+              return
+            } else if (commandLower === 'bookmark') {
+              const bookmarkMessage = args.join(' ') || 'Bookmark'
+
+              if (!roomCreatedAt) {
+                const systemMessage: ChatMessage = {
+                  id: `system-${Date.now()}`,
+                  participantIdentity: 'system',
+                  participantName: 'System',
+                  message: 'Cannot create bookmark: room time not initialized',
+                  timestamp: Date.now(),
+                  isLocal: false,
+                  isSystem: true,
+                }
+                setChatMessages(prev => [...prev, systemMessage])
+                return
+              }
+
+              const roomStartTime = new Date(roomCreatedAt).getTime()
+              const currentTime = Date.now()
+              const meetingElapsed = Math.floor((currentTime - roomStartTime) / 1000)
+              const minutes = Math.floor(meetingElapsed / 60)
+              const seconds = meetingElapsed % 60
+              const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`
+
+              const bookmark: Bookmark = {
+                id: `bookmark-${Date.now()}`,
+                timestamp: currentTime,
+                meetingTime: meetingElapsed,
+                message: bookmarkMessage,
+                createdAt: currentTime,
+              }
+
+              setBookmarks(prev => [...prev, bookmark])
+
+              const systemMessage: ChatMessage = {
+                id: `system-${Date.now()}`,
+                participantIdentity: 'system',
+                participantName: 'System',
+                message: `✓ Bookmark saved at ${timeString}: "${bookmarkMessage}"`,
+                timestamp: Date.now(),
+                isLocal: false,
+                isSystem: true,
+              }
+              setChatMessages(prev => [...prev, systemMessage])
+              log('Bookmark created:', bookmark)
+              return
+            } else if (commandLower === 'bookmarks') {
+              if (bookmarks.length === 0) {
+                const systemMessage: ChatMessage = {
+                  id: `system-${Date.now()}`,
+                  participantIdentity: 'system',
+                  participantName: 'System',
+                  message: 'No bookmarks yet. Use /bookmark <message> to create one.',
+                  timestamp: Date.now(),
+                  isLocal: false,
+                  isSystem: true,
+                }
+                setChatMessages(prev => [...prev, systemMessage])
+                return
+              }
+
+              const bookmarkList = bookmarks
+                .map((b, idx) => {
+                  const minutes = Math.floor(b.meetingTime / 60)
+                  const seconds = b.meetingTime % 60
+                  const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`
+                  return `${idx + 1}. [${timeString}] ${b.message}`
+                })
+                .join('\n')
+
+              const systemMessage: ChatMessage = {
+                id: `system-${Date.now()}`,
+                participantIdentity: 'system',
+                participantName: 'System',
+                message: `Your bookmarks:\n${bookmarkList}`,
+                timestamp: Date.now(),
+                isLocal: false,
+                isSystem: true,
+              }
+              setChatMessages(prev => [...prev, systemMessage])
+              return
+            } else {
+              const systemMessage: ChatMessage = {
+                id: `system-${Date.now()}`,
+                participantIdentity: 'system',
+                participantName: 'System',
+                message: `Unknown command: /${command}\nType /help for available commands.`,
+                timestamp: Date.now(),
+                isLocal: false,
+                isSystem: true,
+              }
+              setChatMessages(prev => [...prev, systemMessage])
+              return
+            }
+          }
+
+          // Regular chat message - send to all participants
+          const chatData = JSON.stringify({
+            type: 'chat',
+            message,
+            timestamp: Date.now(),
+          })
+
+          const encoder = new TextEncoder()
+          const data = encoder.encode(chatData)
+
+          await room.localParticipant.publishData(data, {
+            reliable: true,
+            destinationIdentities: [],
+          })
+
+          // Add to local messages
+          const chatMessage: ChatMessage = {
+            id: `${Date.now()}-${room.localParticipant.identity}`,
+            participantIdentity: room.localParticipant.identity,
+            participantName: room.localParticipant.name || 'You',
+            message,
+            timestamp: Date.now(),
+            isLocal: true,
+          }
+
+          log('Chat message sent:', chatMessage)
+          setChatMessages(prev => [...prev, chatMessage])
+        } catch (err) {
+          logError('Failed to send chat message:', err)
+          throw err
+        }
+      },
+      [roomCreatedAt, bookmarks]
+    ),
   }
 }

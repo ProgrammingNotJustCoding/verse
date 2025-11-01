@@ -335,7 +335,7 @@ export default function CallsPage() {
       log('Step 1: Creating room...')
       const createResponse = await roomService.createRoom({
         name: formTitle,
-        maxParticipants: formType === 'group' ? 50 : 2,
+        maxParticipants: formType === 'group' ? 50 : 3,
       })
 
       const room = createResponse.data.room

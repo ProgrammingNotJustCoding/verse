@@ -23,6 +23,7 @@ export default function CallPage() {
     roomName: string
     token: string
     isAdmin: boolean
+    roomCreatedAt: string
   } | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -63,6 +64,7 @@ export default function CallPage() {
         roomName: room.name,
         token,
         isAdmin: participant.isAdmin,
+        roomCreatedAt: room.createdAt,
       })
 
       setIsLoading(false)
@@ -164,6 +166,7 @@ export default function CallPage() {
         token={roomData.token}
         serverUrl={LIVEKIT_SERVER_URL}
         isAdmin={roomData.isAdmin}
+        roomCreatedAt={roomData.roomCreatedAt}
         onLeave={handleLeave}
         onEndRoom={roomData.isAdmin ? handleEndRoom : undefined}
       />

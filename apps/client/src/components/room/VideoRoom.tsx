@@ -17,8 +17,11 @@ import {
   Pin,
   PinOff,
   Monitor,
+  MessageSquare,
 } from 'lucide-react'
 import { ParticipantVideo } from './ParticipantVideo'
+import { ChatPanel } from './ChatPanel'
+import { MeetingTimer } from './MeetingTimer'
 import { useLiveKit } from '@/hooks/useLiveKit'
 import {
   DropdownMenu,
@@ -41,6 +44,7 @@ interface VideoRoomProps {
   roomName: string
   token: string
   serverUrl: string
+  roomCreatedAt: string
   isAdmin?: boolean
   onLeave: () => void
   onEndRoom?: () => void
@@ -50,6 +54,7 @@ export function VideoRoom({
   roomName,
   token,
   serverUrl,
+  roomCreatedAt,
   isAdmin = false,
   onLeave,
   onEndRoom,
@@ -68,6 +73,10 @@ export function VideoRoom({
     toggleScreenShare,
     getVideoElement,
     getAudioElement,
+    chatMessages,
+    sendChatMessage,
+    roomCreatedAt: roomCreatedAtFromHook,
+    setRoomCreatedAt,
   } = useLiveKit({
     serverUrl,
     onDisconnected: onLeave,
@@ -78,9 +87,19 @@ export function VideoRoom({
 
   const [isScreenSharing, setIsScreenSharing] = useState(false)
   const [showParticipantList, setShowParticipantList] = useState(false)
+  const [showChat, setShowChat] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [pinnedParticipant, setPinnedParticipant] = useState<string | null>(null)
+  const [unreadCount, setUnreadCount] = useState(0)
   const hasConnectedRef = useRef(false)
+  const lastReadMessageCountRef = useRef(0)
+
+  // Set room creation time from props
+  useEffect(() => {
+    if (roomCreatedAt && !roomCreatedAtFromHook) {
+      setRoomCreatedAt(roomCreatedAt)
+    }
+  }, [roomCreatedAt, roomCreatedAtFromHook, setRoomCreatedAt])
 
   useEffect(() => {
     // Prevent multiple connections on remount
@@ -114,6 +133,21 @@ export function VideoRoom({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Track unread messages when chat is closed
+  useEffect(() => {
+    if (showChat) {
+      // Chat is open, mark all messages as read
+      lastReadMessageCountRef.current = chatMessages.length
+      setUnreadCount(0)
+    } else {
+      // Chat is closed, count new messages
+      const newMessages = chatMessages.length - lastReadMessageCountRef.current
+      if (newMessages > 0) {
+        setUnreadCount(newMessages)
+      }
+    }
+  }, [chatMessages.length, showChat])
 
   const handleRetry = () => {
     log('Retry button clicked, reconnecting...')
@@ -263,6 +297,8 @@ export function VideoRoom({
     ? participants.filter(p => p.identity !== pinnedParticipant)
     : null
 
+  const localParticipant = participants.find(p => p.isLocal && !p.isScreenShare)
+
   return (
     <div className="flex h-screen flex-col bg-background">
       {/* Header */}
@@ -289,13 +325,9 @@ export function VideoRoom({
             </Button>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowParticipantList(!showParticipantList)}
-            >
-              <Users className="h-5 w-5" />
-            </Button>
+            {/* Meeting Timer */}
+            <MeetingTimer roomCreatedAt={roomCreatedAt} />
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">
@@ -455,6 +487,18 @@ export function VideoRoom({
           )}
         </div>
 
+        {/* Chat panel */}
+        {showChat && (
+          <div className="w-80 h-full">
+            <ChatPanel
+              messages={chatMessages}
+              onSendMessage={sendChatMessage}
+              onClose={() => setShowChat(false)}
+              participantName={localParticipant?.name || 'You'}
+            />
+          </div>
+        )}
+
         {/* Participant list sidebar */}
         {showParticipantList && (
           <div className="w-64 border-l bg-card p-4">
@@ -486,47 +530,75 @@ export function VideoRoom({
 
       {/* Control bar */}
       <div className="border-t bg-card px-4 py-4">
-        <div className="flex items-center justify-center gap-2">
-          {/* Microphone toggle */}
-          <Button
-            variant={isMicrophoneEnabled ? 'default' : 'destructive'}
-            size="icon"
-            className="h-12 w-12 rounded-full"
-            onClick={toggleMicrophone}
-          >
-            {isMicrophoneEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
-          </Button>
+        <div className="flex items-center justify-between">
+          <div className="w-[120px]"></div>
 
-          {/* Camera toggle */}
-          <Button
-            variant={isCameraEnabled ? 'default' : 'destructive'}
-            size="icon"
-            className="h-12 w-12 rounded-full"
-            onClick={toggleCamera}
-          >
-            {isCameraEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Microphone toggle */}
+            <Button
+              variant={isMicrophoneEnabled ? 'default' : 'destructive'}
+              size="icon"
+              className="h-12 w-12 rounded-full"
+              onClick={toggleMicrophone}
+            >
+              {isMicrophoneEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+            </Button>
 
-          {/* Screen share toggle */}
-          <Button
-            variant={isScreenSharing ? 'secondary' : 'outline'}
-            size="icon"
-            className="h-12 w-12 rounded-full"
-            onClick={handleToggleScreenShare}
-          >
-            <MonitorUp className="h-5 w-5" />
-          </Button>
+            {/* Camera toggle */}
+            <Button
+              variant={isCameraEnabled ? 'default' : 'destructive'}
+              size="icon"
+              className="h-12 w-12 rounded-full"
+              onClick={toggleCamera}
+            >
+              {isCameraEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
+            </Button>
 
-          {/* Leave button */}
-          <Button
-            variant="destructive"
-            size="lg"
-            className="ml-4 rounded-full"
-            onClick={handleLeave}
-          >
-            <PhoneOff className="mr-2 h-5 w-5" />
-            Leave
-          </Button>
+            {/* Screen share toggle */}
+            <Button
+              variant={isScreenSharing ? 'secondary' : 'outline'}
+              size="icon"
+              className="h-12 w-12 rounded-full"
+              onClick={handleToggleScreenShare}
+            >
+              <MonitorUp className="h-5 w-5" />
+            </Button>
+
+            {/* Leave button */}
+            <Button
+              variant="destructive"
+              size="lg"
+              className="ml-4 rounded-full"
+              onClick={handleLeave}
+            >
+              <PhoneOff className="mr-2 h-5 w-5" />
+              Leave
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant={showChat ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-12 w-12 rounded-full relative"
+              onClick={() => setShowChat(!showChat)}
+            >
+              <MessageSquare className="h-5 w-5" />
+              {unreadCount > 0 && !showChat && (
+                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
+                  {unreadCount}
+                </span>
+              )}
+            </Button>
+            <Button
+              variant={showParticipantList ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-12 w-12 rounded-full"
+              onClick={() => setShowParticipantList(!showParticipantList)}
+            >
+              <Users className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
       </div>
     </div>
