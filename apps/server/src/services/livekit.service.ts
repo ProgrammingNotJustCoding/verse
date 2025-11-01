@@ -47,6 +47,22 @@ export const createLivekitService = (env: Environment) => {
     return await at.toJwt()
   }
 
+  const dispatchRoomAgent = async (roomName: string) => {
+    try {
+      const agentDispatch = {
+        room: roomName,
+        agentName: 'caption-agent',
+      }
+
+      await roomService.listRooms([roomName])
+
+      return agentDispatch
+    } catch (error) {
+      console.error('Failed to dispatch agent:', error)
+      throw error
+    }
+  }
+
   return {
     createRoom,
     deleteRoom,
@@ -54,6 +70,7 @@ export const createLivekitService = (env: Environment) => {
     removeParticipant,
     generateToken,
     roomService,
+    dispatchRoomAgent,
   }
 }
 
