@@ -5,7 +5,14 @@ import toast, { Toaster } from 'react-hot-toast'
 
 import Button from '../common/Button'
 import Input from '../common/Input'
-import { signUp, login } from '../../services/auth.service'
+import {
+  signUp,
+  login,
+  isAuthError,
+  getAuthErrorMessage,
+  type SignUpData,
+  type LoginData,
+} from '../../services/auth.service'
 import { signUpValidator, loginValidator } from '../../validators/auth.validators'
 import { useUserStore } from '../../store/users'
 import { useValidate } from '../../hooks/useValidate'
@@ -39,19 +46,25 @@ const AuthForm: React.FC = () => {
     }
     setLoading(true)
     try {
-      const res = isSignUp
-        ? await signUp({ name: formData.name, email: formData.email, password: formData.password })
-        : await login({ email: formData.email, password: formData.password })
+      const authData = isSignUp
+        ? ({
+            name: formData.name,
+            email: formData.email,
+            password: formData.password,
+          } as SignUpData)
+        : ({ email: formData.email, password: formData.password } as LoginData)
 
-      if (res.error) {
-        const errorMessage =
-          typeof res.error === 'string'
-            ? res.error
-            : res.error.prettyMessage || res.error.message || 'An error occurred'
+      const res = isSignUp
+        ? await signUp(authData as SignUpData)
+        : await login(authData as LoginData)
+
+      if (isAuthError(res)) {
+        const errorMessage = getAuthErrorMessage(res)
         toast.error(errorMessage, { style: { background: '#171717', color: '#ff8800' } })
       } else if (res.data?.token) {
+        
         setUser({ id: 0, name: formData.name, email: formData.email })
-        toast.success('Success!', { style: { background: '#171717', color: '#ff8800' } })
+        toast.success('Success!', { style: { background: '#171717', color: '#00ff00' } })
         navigate('/dash')
       }
     } catch (error) {

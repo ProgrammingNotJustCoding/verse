@@ -5,4 +5,16 @@ export const API = {
     SIGN_UP: () => '/signup',
     LOGIN: () => '/login',
   },
+  ROOMS: {
+    BASE_URL: () => '/rooms',
+    CREATE: () => '',
+    JOIN: () => '/join',
+    LEAVE: (roomId: string) => `/${roomId}/leave`,
+    END: (roomId: string) => `/${roomId}`,
+    DETAILS: (roomId: string) => `/${roomId}`,
+    PARTICIPANTS: (roomId: string) => `/${roomId}/participants`,
+    REMOVE_PARTICIPANT: (roomId: string, participantId: string) =>
+      `/${roomId}/participants/${participantId}`,
+    USER_ROOMS: () => '',
+  },
 }

@@ -1,4 +1,5 @@
 import z from 'zod'
+import { isValidMeetingCode } from '../../utils/meeting.ts'
 
 type CreateRoom = {
   name: string
@@ -6,19 +7,19 @@ type CreateRoom = {
 }
 
 type JoinRoom = {
-  roomId: string
+  meetingId: string
 }
 
 type LeaveRoom = {
-  roomId: string
+  meetingId: string
 }
 
 type EndRoom = {
-  roomId: string
+  meetingId: string
 }
 
 type RemoveParticipant = {
-  roomId: string
+  meetingId: string
   participantId: string
 }
 
@@ -33,7 +34,9 @@ export const createRoomValidator = (body: CreateRoom) => {
 
 export const joinRoomValidator = (body: JoinRoom) => {
   const schema = z.object({
-    roomId: z.string().uuid(),
+    meetingId: z.string().length(26).refine(isValidMeetingCode, {
+      message: 'Invalid meeting code format',
+    }),
   })
 
   return schema.safeParse(body)
@@ -41,7 +44,9 @@ export const joinRoomValidator = (body: JoinRoom) => {
 
 export const leaveRoomValidator = (params: LeaveRoom) => {
   const schema = z.object({
-    roomId: z.string().uuid(),
+    meetingId: z.string().length(26).refine(isValidMeetingCode, {
+      message: 'Invalid meeting code format',
+    }),
   })
 
   return schema.safeParse(params)
@@ -49,7 +54,9 @@ export const leaveRoomValidator = (params: LeaveRoom) => {
 
 export const endRoomValidator = (params: EndRoom) => {
   const schema = z.object({
-    roomId: z.string().uuid(),
+    meetingId: z.string().length(26).refine(isValidMeetingCode, {
+      message: 'Invalid meeting code format',
+    }),
   })
 
   return schema.safeParse(params)
@@ -57,7 +64,9 @@ export const endRoomValidator = (params: EndRoom) => {
 
 export const removeParticipantValidator = (params: RemoveParticipant) => {
   const schema = z.object({
-    roomId: z.string().uuid(),
+    meetingId: z.string().length(26).refine(isValidMeetingCode, {
+      message: 'Invalid meeting code format',
+    }),
     participantId: z.string().uuid(),
   })
 

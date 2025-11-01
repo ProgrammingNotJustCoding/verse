@@ -1,6 +1,6 @@
 import { createInsertSchema } from 'drizzle-zod'
 import { participants } from '../schema/participants.ts'
-import { eq, and, isNull } from 'drizzle-orm'
+import { eq, and, isNull, lt } from 'drizzle-orm'
 import type { Database } from '../db.ts'
 
 export const insertParticipantSchema = createInsertSchema(participants)
@@ -41,7 +41,7 @@ class ParticipantRepository {
       .from(participants)
       .where(and(eq(participants.roomId, roomId), eq(participants.userId, userId)))
       .orderBy(participants.joinedAt)
-    return result[result.length - 1] // Get latest participation
+    return result[result.length - 1] 
   }
 
   async getActiveByRoomAndUser(roomId: string, userId: string): Promise<Participant | undefined> {
@@ -139,6 +139,28 @@ class ParticipantRepository {
       .select()
       .from(participants)
       .where(and(eq(participants.roomId, roomId), isNull(participants.leftAt)))
+    return result.length
+  }
+
+  async cleanupStaleParticipants(roomId: string, hoursThreshold = 24): Promise<number> {
+    
+    const thresholdDate = new Date()
+    thresholdDate.setHours(thresholdDate.getHours() - hoursThreshold)
+
+    const result = await this.db
+      .update(participants)
+      .set({ leftAt: new Date() })
+      .where(
+        and(
+          eq(participants.roomId, roomId),
+          isNull(participants.leftAt),
+          
+          
+          lt(participants.joinedAt, thresholdDate)
+        )
+      )
+      .returning()
+
     return result.length
   }
 }

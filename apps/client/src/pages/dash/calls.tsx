@@ -13,7 +13,18 @@ import {
 import { Label } from '@/components/ui/label'
 import { useDmsStore } from '@/store/dms'
 import { useGroupsStore } from '@/store/groups'
-import { Plus, Search, Video, Tag as TagIcon, X, Edit2, Trash2 } from 'lucide-react'
+import { Plus, Search, Video, Tag as TagIcon, X, Edit2, Trash2, PhoneCall } from 'lucide-react'
+import toast, { Toaster } from 'react-hot-toast'
+import { roomService } from '@/services/room/room.service'
+
+
+const DEBUG = true
+const log = (...args: unknown[]) => {
+  if (DEBUG) console.log('[CallsPage]', ...args)
+}
+const error = (...args: unknown[]) => {
+  if (DEBUG) console.error('[CallsPage]', ...args)
+}
 
 type Call = {
   id: number
@@ -36,7 +47,7 @@ const initialCallsData: Call[] = [
       { id: '2', name: 'Alice' },
       { id: '3', name: 'Bob' },
     ],
-    date: new Date(new Date().setDate(new Date().getDate() + 1)), // Tomorrow
+    date: new Date(new Date().setDate(new Date().getDate() + 1)), 
     duration: '15 min',
     tags: ['daily', 'team'],
   },
@@ -50,7 +61,7 @@ const initialCallsData: Call[] = [
       { id: '5', name: 'David' },
       { id: '6', name: 'Eve' },
     ],
-    date: new Date(), // Today
+    date: new Date(), 
     duration: '45 min',
     tags: ['project', 'kickoff', 'important'],
   },
@@ -62,7 +73,7 @@ const initialCallsData: Call[] = [
       { id: 'you', name: 'You' },
       { id: '7', name: 'Sarah' },
     ],
-    date: new Date(new Date().setDate(new Date().getDate() - 1)), // Yesterday
+    date: new Date(new Date().setDate(new Date().getDate() - 1)), 
     duration: '30 min',
     tags: ['1:1', 'feedback'],
   },
@@ -72,16 +83,18 @@ function CallCard({
   call,
   onEdit,
   onDelete,
+  onJoin,
 }: {
   call: Call
   onEdit: (call: Call) => void
   onDelete: (callId: number) => void
+  onJoin?: (call: Call) => void
 }) {
   const navigate = useNavigate()
   const { getDmByUserId, setActiveDm } = useDmsStore()
 
   const handleParticipantClick = (participantId: string) => {
-    if (participantId === 'you') return // Don't open chat with 'You'
+    if (participantId === 'you') return 
     const dm = getDmByUserId(participantId)
     if (dm) {
       setActiveDm(dm)
@@ -136,6 +149,11 @@ function CallCard({
           </p>
         </div>
         <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          {onJoin && call.date >= new Date() && (
+            <Button variant="default" size="icon" className="size-8" onClick={() => onJoin(call)}>
+              <Video className="size-4" />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" className="size-8" onClick={() => onEdit(call)}>
             <Edit2 className="size-4" />
           </Button>
@@ -160,8 +178,11 @@ export default function CallsPage() {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [editingCall, setEditingCall] = React.useState<Call | null>(null)
   const { groups } = useGroupsStore()
+  const navigate = useNavigate()
 
-  // Form state
+  const [isCreatingRoom, setIsCreatingRoom] = React.useState(false)
+
+  
   const [formTitle, setFormTitle] = React.useState('')
   const [formType, setFormType] = React.useState<'group' | 'personal'>('personal')
   const [formGroupId, setFormGroupId] = React.useState('')
@@ -223,7 +244,7 @@ export default function CallsPage() {
     const dateTime = new Date(`${formDate}T${formTime}`)
 
     if (editingCall) {
-      // Update existing call
+      
       setCalls(
         calls.map(call =>
           call.id === editingCall.id
@@ -240,7 +261,7 @@ export default function CallsPage() {
         )
       )
     } else {
-      // Create new call
+      
       const newCall: Call = {
         id: Date.now(),
         title: formTitle,
@@ -289,17 +310,68 @@ export default function CallsPage() {
   const upcomingCalls = React.useMemo(() => {
     return filteredAndSortedCalls
       .filter(call => call.date >= new Date())
-      .sort((a, b) => a.date.getTime() - b.date.getTime()) // Ascending - nearest first
+      .sort((a, b) => a.date.getTime() - b.date.getTime()) 
   }, [filteredAndSortedCalls])
 
   const pastCalls = React.useMemo(() => {
     return filteredAndSortedCalls
       .filter(call => call.date < new Date())
-      .sort((a, b) => b.date.getTime() - a.date.getTime()) // Descending - most recent first
+      .sort((a, b) => b.date.getTime() - a.date.getTime()) 
   }, [filteredAndSortedCalls])
+
+  
+  const handleCreateAndJoinRoom = async () => {
+    if (!formTitle.trim()) {
+      toast.error('Please enter a room name', {
+        style: { background: '#171717', color: '#ff8800' },
+      })
+      return
+    }
+
+    log('Creating and joining room:', formTitle)
+    setIsCreatingRoom(true)
+    try {
+      
+      log('Step 1: Creating room...')
+      const createResponse = await roomService.createRoom({
+        name: formTitle,
+        maxParticipants: formType === 'group' ? 50 : 3,
+      })
+
+      const room = createResponse.data.room
+      log('Step 1 ✓: Room created:', room.id)
+
+      setIsDialogOpen(false)
+      resetForm()
+
+      toast.success(`Room created: ${room.name}`, {
+        style: { background: '#171717', color: '#00ff00' },
+      })
+
+      
+      log('Navigating to call page:', `/call/${room.meetingId}`)
+      navigate(`/call/${room.meetingId}`)
+    } catch (err) {
+      error('Failed to create and join room:', err)
+      toast.error(err instanceof Error ? err.message : 'Failed to create room', {
+        style: { background: '#171717', color: '#ff8800' },
+      })
+    } finally {
+      setIsCreatingRoom(false)
+    }
+  }
+
+  
+  const handleJoinCall = (call: Call) => {
+    log('Joining existing call:', call.title)
+    setFormTitle(call.title)
+    setFormType(call.type)
+    handleCreateAndJoinRoom()
+  }
 
   return (
     <div className="flex h-full flex-col gap-4 p-4">
+      <Toaster position="top-center" />
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Calls</h1>
         <div className="flex items-center gap-2">
@@ -307,12 +379,12 @@ export default function CallsPage() {
             <DialogTrigger asChild>
               <Button onClick={openAddDialog}>
                 <Plus className="mr-2 size-4" />
-                New Meeting
+                Schedule Meeting
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-md">
               <DialogHeader>
-                <DialogTitle>{editingCall ? 'Edit Meeting' : 'New Meeting'}</DialogTitle>
+                <DialogTitle>{editingCall ? 'Edit Meeting' : 'Schedule Meeting'}</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
@@ -423,6 +495,55 @@ export default function CallsPage() {
               </form>
             </DialogContent>
           </Dialog>
+
+          {/* Quick join room button */}
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="default">
+                <PhoneCall className="mr-2 size-4" />
+                Start Call Now
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Start Instant Call</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="quickRoomName">Room Name *</Label>
+                  <Input
+                    id="quickRoomName"
+                    value={formTitle}
+                    onChange={e => setFormTitle(e.target.value)}
+                    placeholder="Enter room name"
+                    disabled={isCreatingRoom}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="quickType">Type</Label>
+                  <select
+                    id="quickType"
+                    value={formType}
+                    onChange={e => setFormType(e.target.value as 'group' | 'personal')}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                    disabled={isCreatingRoom}
+                  >
+                    <option value="group">Group Call</option>
+                    <option value="personal">1-on-1 Call</option>
+                  </select>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    onClick={handleCreateAndJoinRoom}
+                    disabled={isCreatingRoom || !formTitle.trim()}
+                  >
+                    {isCreatingRoom ? 'Creating...' : 'Start Call'}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </header>
 
@@ -474,6 +595,7 @@ export default function CallsPage() {
                   call={call}
                   onEdit={openEditDialog}
                   onDelete={handleDeleteCall}
+                  onJoin={handleJoinCall}
                 />
               ))
             ) : (

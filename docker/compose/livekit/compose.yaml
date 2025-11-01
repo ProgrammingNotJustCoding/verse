@@ -12,6 +12,7 @@ services:
       - ./livekit.yaml:/etc/livekit.yaml:ro,Z
     depends_on:
       - redis
+      - coturn
     networks:
       - verse-network
 

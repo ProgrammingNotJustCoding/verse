@@ -10,6 +10,9 @@ import {
   Sun,
   Moon,
 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { logout } from '@/services/auth.service'
+import toast from 'react-hot-toast'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -40,9 +43,18 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar()
   const { theme, setTheme } = useThemeStore()
+  const navigate = useNavigate()
 
   const toggleTheme = () => {
     setTheme(theme === 'light' ? 'dark' : 'light')
+  }
+
+  const handleLogout = () => {
+    logout()
+    toast.success('Logged out successfully', {
+      style: { background: '#171717', color: '#00ff00' },
+    })
+    navigate('/auth')
   }
 
   return (
@@ -114,7 +126,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="text-primary" />
               Log out
             </DropdownMenuItem>

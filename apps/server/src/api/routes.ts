@@ -23,13 +23,13 @@ const roomRouter = new Hono()
 roomRouter.use('*', authMiddleware)
 roomRouter.post('/', createRoom)
 roomRouter.get('/', getUserRooms)
-roomRouter.get('/:roomId', getRoomDetails)
+roomRouter.get('/:meetingId', getRoomDetails)
 roomRouter.post('/join', joinRoom)
-roomRouter.post('/:roomId/leave', leaveRoom)
-roomRouter.delete('/:roomId', endRoom)
+roomRouter.post('/:meetingId/leave', leaveRoom)
+roomRouter.delete('/:meetingId', endRoom)
 
-roomRouter.get('/:roomId/participants', getRoomParticipants)
-roomRouter.delete('/:roomId/participants/:participantId', removeParticipant)
+roomRouter.get('/:meetingId/participants', getRoomParticipants)
+roomRouter.delete('/:meetingId/participants/:participantId', removeParticipant)
 
 const participantRouter = new Hono()
 

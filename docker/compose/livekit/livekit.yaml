@@ -1,16 +1,25 @@
 port: 7880
 
-log_level: info
+log_level: debug
 
 rtc:
   tcp_port: 7881
-  port_range_start: 50000
-  port_range_end: 60000
-  use_external_ip: true
+  port_range_start: 50100
+  port_range_end: 50199
+  # For local development: disable external IP discovery and force localhost
+  use_external_ip: false
+  # Force the node to advertise localhost as its IP
+  node_ip: 127.0.0.1
+  # TURN server configuration for Docker NAT traversal
+  turn_servers:
+    - host: coturn
+      port: 3478
+      protocol: udp # Use 'tls' if forcing TLS on 5349; 'udp' for standard TURN
+      username: "verse" # Username for TURN auth
+      credential: verse-turn-secret
 
 redis:
   address: redis:6379
 
 keys:
   verse-api-key: verse-api-secret-value-here-change-me
-
