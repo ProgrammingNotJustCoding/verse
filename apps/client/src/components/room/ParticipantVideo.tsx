@@ -1,34 +1,44 @@
-import { useEffect, useRef } from 'react'
-import { Mic, MicOff, User } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Mic, MicOff, User, Monitor } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { RemoteTrack } from 'livekit-client'
 
 interface ParticipantVideoProps {
   identity: string
   name: string
-  videoTrack?: RemoteTrack
-  audioTrack?: RemoteTrack
+  videoTrack?: RemoteTrack | MediaStreamTrack
+  audioTrack?: RemoteTrack | MediaStreamTrack
+  screenShareTrack?: RemoteTrack | MediaStreamTrack
   isSpeaking?: boolean
   isMuted?: boolean
   isVideoOff?: boolean
   isLocal?: boolean
+  isScreenShare?: boolean
   getVideoElement?: () => HTMLVideoElement | null
+  getAudioElement?: () => HTMLAudioElement | null
 }
 
 export function ParticipantVideo({
   identity: _identity,
   name,
-  videoTrack,
+  videoTrack: _videoTrack,
   audioTrack,
+  screenShareTrack: _screenShareTrack,
   isSpeaking = false,
   isMuted = false,
   isVideoOff: _isVideoOff = false,
   isLocal = false,
+  isScreenShare = false,
   getVideoElement,
+  getAudioElement,
 }: ParticipantVideoProps) {
   const videoRef = useRef<HTMLDivElement>(null)
+  const audioRef = useRef<HTMLDivElement>(null)
   const videoElementRef = useRef<HTMLVideoElement | null>(null)
+  const audioElementRef = useRef<HTMLAudioElement | null>(null)
+  const [hasVideoElement, setHasVideoElement] = useState(false)
 
+  // Handle video element (camera or screen share)
   useEffect(() => {
     if (!videoRef.current) return
 
@@ -36,46 +46,122 @@ export function ParticipantVideo({
     if (videoElementRef.current) {
       videoElementRef.current.remove()
       videoElementRef.current = null
+      setHasVideoElement(false)
     }
 
-    // Get and attach new video element
-    if (getVideoElement && videoTrack) {
-      const videoElement = getVideoElement()
-      if (videoElement) {
-        videoElement.className = 'h-full w-full object-cover'
-        if (isLocal) {
-          videoElement.style.transform = 'scaleX(-1)' // Mirror local video
+    // Always try to get video element - let LiveKit determine if track exists
+    if (getVideoElement) {
+      try {
+        const videoElement = getVideoElement()
+        if (videoElement) {
+          // Set video element properties
+          videoElement.className = 'h-full w-full object-cover'
+          videoElement.autoplay = true
+          videoElement.playsInline = true
+          videoElement.muted = isLocal // Mute local video to prevent echo
+
+          if (isLocal && !_screenShareTrack) {
+            videoElement.style.transform = 'scaleX(-1)' // Mirror local video (but not screen share)
+          }
+
+          // Append to container
+          videoRef.current.appendChild(videoElement)
+          videoElementRef.current = videoElement
+          setHasVideoElement(true)
+
+          // Try to play the video
+          videoElement.play().catch((err: Error) => {
+            console.warn('Failed to play video:', err)
+          })
         }
-        videoRef.current.appendChild(videoElement)
-        videoElementRef.current = videoElement
+      } catch (err) {
+        console.error('Error attaching video element:', err)
       }
     }
 
     return () => {
       if (videoElementRef.current) {
+        videoElementRef.current.pause()
+        videoElementRef.current.srcObject = null
         videoElementRef.current.remove()
         videoElementRef.current = null
+        setHasVideoElement(false)
       }
     }
-  }, [videoTrack, getVideoElement, isLocal])
+  }, [_videoTrack, _screenShareTrack, getVideoElement, isLocal])
+
+  // Handle audio element (remote participants only)
+  useEffect(() => {
+    if (!audioRef.current || isLocal) return
+
+    // Remove existing audio element
+    if (audioElementRef.current) {
+      audioElementRef.current.remove()
+      audioElementRef.current = null
+    }
+
+    // Get and attach new audio element if there's an audio track
+    if (getAudioElement && audioTrack) {
+      try {
+        const audioElement = getAudioElement()
+        if (audioElement) {
+          // Set audio element properties
+          audioElement.autoplay = true
+
+          // Append to container (hidden)
+          audioRef.current.appendChild(audioElement)
+          audioElementRef.current = audioElement
+
+          // Try to play the audio
+          audioElement.play().catch((err: Error) => {
+            console.warn('Failed to play audio:', err)
+          })
+        }
+      } catch (err) {
+        console.error('Error attaching audio element:', err)
+      }
+    }
+
+    return () => {
+      if (audioElementRef.current) {
+        audioElementRef.current.pause()
+        audioElementRef.current.srcObject = null
+        audioElementRef.current.remove()
+        audioElementRef.current = null
+      }
+    }
+  }, [audioTrack, getAudioElement, isLocal])
 
   return (
     <div
       className={cn(
-        'relative aspect-video overflow-hidden rounded-lg bg-secondary',
+        'relative aspect-video overflow-hidden rounded-lg',
+        isScreenShare ? 'bg-slate-900' : 'bg-secondary',
         isSpeaking && 'ring-2 ring-primary'
       )}
     >
       {/* Video container */}
       <div ref={videoRef} className="h-full w-full">
-        {!videoTrack && (
-          <div className="flex h-full w-full items-center justify-center bg-secondary">
+        {!hasVideoElement && (
+          <div
+            className={cn(
+              'flex h-full w-full items-center justify-center',
+              isScreenShare ? 'bg-slate-900' : 'bg-secondary'
+            )}
+          >
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/20">
-              <User className="h-8 w-8 text-primary" />
+              {isScreenShare ? (
+                <Monitor className="h-8 w-8 text-primary" />
+              ) : (
+                <User className="h-8 w-8 text-primary" />
+              )}
             </div>
           </div>
         )}
       </div>
+
+      {/* Hidden audio container for remote participants */}
+      <div ref={audioRef} className="hidden" />
 
       {/* Participant info overlay */}
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">

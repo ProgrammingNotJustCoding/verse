@@ -1,6 +1,6 @@
 import { createInsertSchema } from 'drizzle-zod'
 import { participants } from '../schema/participants.ts'
-import { eq, and, isNull } from 'drizzle-orm'
+import { eq, and, isNull, lt } from 'drizzle-orm'
 import type { Database } from '../db.ts'
 
 export const insertParticipantSchema = createInsertSchema(participants)
@@ -139,6 +139,28 @@ class ParticipantRepository {
       .select()
       .from(participants)
       .where(and(eq(participants.roomId, roomId), isNull(participants.leftAt)))
+    return result.length
+  }
+
+  async cleanupStaleParticipants(roomId: string, hoursThreshold = 24): Promise<number> {
+    // Mark participants as left if they've been active for more than the threshold
+    const thresholdDate = new Date()
+    thresholdDate.setHours(thresholdDate.getHours() - hoursThreshold)
+
+    const result = await this.db
+      .update(participants)
+      .set({ leftAt: new Date() })
+      .where(
+        and(
+          eq(participants.roomId, roomId),
+          isNull(participants.leftAt),
+          // Only cleanup if joined more than threshold hours ago
+          // This catches participants who never properly left
+          lt(participants.joinedAt, thresholdDate)
+        )
+      )
+      .returning()
+
     return result.length
   }
 }

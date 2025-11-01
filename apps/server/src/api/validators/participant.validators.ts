@@ -1,11 +1,12 @@
 import z from 'zod'
+import { isValidMeetingCode } from '../../utils/meeting.ts'
 
 type GetParticipant = {
   participantId: string
 }
 
 type GetRoomParticipants = {
-  roomId: string
+  meetingId: string
 }
 
 export const getParticipantValidator = (params: GetParticipant) => {
@@ -18,7 +19,9 @@ export const getParticipantValidator = (params: GetParticipant) => {
 
 export const getRoomParticipantsValidator = (params: GetRoomParticipants) => {
   const schema = z.object({
-    roomId: z.string().uuid(),
+    meetingId: z.string().length(26).refine(isValidMeetingCode, {
+      message: 'Invalid meeting code format',
+    }),
   })
 
   return schema.safeParse(params)

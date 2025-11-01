@@ -21,11 +21,12 @@ export interface CreateRoomData {
 }
 
 export interface JoinRoomData {
-  roomId: string
+  meetingId: string
 }
 
 export interface Room {
   id: string
+  meetingId: string
   name: string
   sid: string
   createdBy: string
@@ -95,9 +96,9 @@ export const roomService = {
     return result as { data: JoinRoomResponse }
   },
 
-  async leaveRoom(roomId: string) {
-    log('leaveRoom called:', roomId)
-    const url = `${API.BASE_URL}${API.ROOMS.BASE_URL()}${API.ROOMS.LEAVE(roomId)}`
+  async leaveRoom(meetingId: string) {
+    log('leaveRoom called:', meetingId)
+    const url = `${API.BASE_URL}${API.ROOMS.BASE_URL()}${API.ROOMS.LEAVE(meetingId)}`
     log('POST', url)
 
     const res = await fetch(url, {
@@ -121,9 +122,9 @@ export const roomService = {
     return result as { data: { message: string } }
   },
 
-  async endRoom(roomId: string) {
-    log('endRoom called:', roomId)
-    const url = `${API.BASE_URL}${API.ROOMS.BASE_URL()}${API.ROOMS.END(roomId)}`
+  async endRoom(meetingId: string) {
+    log('endRoom called:', meetingId)
+    const url = `${API.BASE_URL}${API.ROOMS.BASE_URL()}${API.ROOMS.END(meetingId)}`
     log('DELETE', url)
 
     const res = await fetch(url, {
@@ -142,9 +143,9 @@ export const roomService = {
     return result as { data: { message: string } }
   },
 
-  async getRoomDetails(roomId: string) {
-    log('getRoomDetails called:', roomId)
-    const url = `${API.BASE_URL}${API.ROOMS.BASE_URL()}${API.ROOMS.DETAILS(roomId)}`
+  async getRoomDetails(meetingId: string) {
+    log('getRoomDetails called:', meetingId)
+    const url = `${API.BASE_URL}${API.ROOMS.BASE_URL()}${API.ROOMS.DETAILS(meetingId)}`
     log('GET', url)
 
     const res = await fetch(url, {
@@ -163,9 +164,9 @@ export const roomService = {
     return result as { data: { room: Room; participantCount: number } }
   },
 
-  async getRoomParticipants(roomId: string) {
-    log('getRoomParticipants called:', roomId)
-    const url = `${API.BASE_URL}${API.ROOMS.BASE_URL()}${API.ROOMS.PARTICIPANTS(roomId)}`
+  async getRoomParticipants(meetingId: string) {
+    log('getRoomParticipants called:', meetingId)
+    const url = `${API.BASE_URL}${API.ROOMS.BASE_URL()}${API.ROOMS.PARTICIPANTS(meetingId)}`
     log('GET', url)
 
     const res = await fetch(url, {
@@ -184,9 +185,9 @@ export const roomService = {
     return result as { data: { participants: Participant[] } }
   },
 
-  async removeParticipant(roomId: string, participantId: string) {
-    log('removeParticipant called:', roomId, participantId)
-    const url = `${API.BASE_URL}${API.ROOMS.BASE_URL()}${API.ROOMS.REMOVE_PARTICIPANT(roomId, participantId)}`
+  async removeParticipant(meetingId: string, participantId: string) {
+    log('removeParticipant called:', meetingId, participantId)
+    const url = `${API.BASE_URL}${API.ROOMS.BASE_URL()}${API.ROOMS.REMOVE_PARTICIPANT(meetingId, participantId)}`
     log('DELETE', url)
 
     const res = await fetch(url, {

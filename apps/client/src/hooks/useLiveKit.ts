@@ -31,9 +31,12 @@ export interface ParticipantInfo {
   identity: string
   name?: string
   isSpeaking: boolean
-  audioTrack?: RemoteTrack
-  videoTrack?: RemoteTrack
+  audioTrack?: RemoteTrack | MediaStreamTrack
+  videoTrack?: RemoteTrack | MediaStreamTrack
+  screenShareTrack?: RemoteTrack | MediaStreamTrack
   isLocal: boolean
+  isScreenShare?: boolean
+  screenShareIdentity?: string // The identity of the participant sharing
 }
 
 export function useLiveKit(options: UseLiveKitOptions) {
@@ -60,30 +63,84 @@ export function useLiveKit(options: UseLiveKitOptions) {
 
     // Add local participant
     const localParticipant = room.localParticipant
+    const localVideoPublication = localParticipant.getTrackPublication(Track.Source.Camera)
+    const localAudioPublication = localParticipant.getTrackPublication(Track.Source.Microphone)
+    const localScreenPublication = localParticipant.getTrackPublication(Track.Source.ScreenShare)
+
+    log('Local participant tracks:', {
+      video: localVideoPublication?.track?.kind,
+      audio: localAudioPublication?.track?.kind,
+      screen: localScreenPublication?.track?.kind,
+      videoEnabled: localParticipant.isCameraEnabled,
+      audioEnabled: localParticipant.isMicrophoneEnabled,
+    })
+
+    // Add local participant (camera)
     participantMap.set(localParticipant.identity, {
       identity: localParticipant.identity,
       name: localParticipant.name || 'You',
       isSpeaking: localParticipant.isSpeaking,
-      audioTrack: undefined,
-      videoTrack: undefined,
+      audioTrack: localAudioPublication?.track?.mediaStreamTrack,
+      videoTrack: localVideoPublication?.track?.mediaStreamTrack,
+      screenShareTrack: localScreenPublication?.track?.mediaStreamTrack,
       isLocal: true,
+      isScreenShare: false,
     })
+
+    // Add local screen share as separate tile if sharing
+    if (localScreenPublication?.track) {
+      participantMap.set(`${localParticipant.identity}_screen`, {
+        identity: `${localParticipant.identity}_screen`,
+        name: `${localParticipant.name || 'You'}'s Screen`,
+        isSpeaking: false,
+        videoTrack: localScreenPublication.track.mediaStreamTrack,
+        isLocal: true,
+        isScreenShare: true,
+        screenShareIdentity: localParticipant.identity,
+      })
+    }
 
     // Add remote participants
     room.remoteParticipants.forEach((participant: RemoteParticipant) => {
       const videoPublication = participant.getTrackPublication(Track.Source.Camera)
       const audioPublication = participant.getTrackPublication(Track.Source.Microphone)
+      const screenPublication = participant.getTrackPublication(Track.Source.ScreenShare)
 
+      log('Remote participant tracks:', participant.identity, {
+        video: videoPublication?.track?.kind,
+        audio: audioPublication?.track?.kind,
+        screen: screenPublication?.track?.kind,
+        videoSubscribed: videoPublication?.isSubscribed,
+        audioSubscribed: audioPublication?.isSubscribed,
+      })
+
+      // Add remote participant (camera)
       participantMap.set(participant.identity, {
         identity: participant.identity,
         name: participant.name || participant.identity,
         isSpeaking: participant.isSpeaking,
         audioTrack: audioPublication?.track,
         videoTrack: videoPublication?.track,
+        screenShareTrack: screenPublication?.track,
         isLocal: false,
+        isScreenShare: false,
       })
+
+      // Add remote screen share as separate tile if sharing
+      if (screenPublication?.track) {
+        participantMap.set(`${participant.identity}_screen`, {
+          identity: `${participant.identity}_screen`,
+          name: `${participant.name || participant.identity}'s Screen`,
+          isSpeaking: false,
+          videoTrack: screenPublication.track,
+          isLocal: false,
+          isScreenShare: true,
+          screenShareIdentity: participant.identity,
+        })
+      }
     })
 
+    log('Updated participants count:', participantMap.size)
     setParticipants(participantMap)
   }, [])
 
@@ -329,27 +386,80 @@ export function useLiveKit(options: UseLiveKitOptions) {
     }
   }, [updateParticipants])
 
-  // Get participant video element
-  const getVideoElement = useCallback((identity: string): HTMLVideoElement | null => {
+  // Get participant video element (camera or screen share)
+  const getVideoElement = useCallback(
+    (identity: string, _isScreenShare = false): HTMLVideoElement | null => {
+      const room = roomRef.current
+      if (!room) return null
+
+      // Handle screen share tiles (identity ends with _screen)
+      if (identity.endsWith('_screen')) {
+        const actualIdentity = identity.replace('_screen', '')
+
+        if (actualIdentity === room.localParticipant.identity) {
+          // Local screen share
+          const screenPublication = room.localParticipant.getTrackPublication(
+            Track.Source.ScreenShare
+          )
+          if (screenPublication?.track) {
+            const element = screenPublication.track.attach()
+            return element as HTMLVideoElement
+          }
+        } else {
+          // Remote screen share
+          const participant = room.remoteParticipants.get(actualIdentity)
+          if (participant) {
+            const screenPublication = participant.getTrackPublication(Track.Source.ScreenShare)
+            if (screenPublication?.track) {
+              const element = screenPublication.track.attach()
+              return element as HTMLVideoElement
+            }
+          }
+        }
+      } else {
+        // Regular camera view
+        if (identity === room.localParticipant.identity) {
+          // Local participant camera
+          const videoPublication = room.localParticipant.getTrackPublication(Track.Source.Camera)
+          if (videoPublication?.track) {
+            const element = videoPublication.track.attach()
+            return element as HTMLVideoElement
+          }
+        } else {
+          // Remote participant camera
+          const participant = room.remoteParticipants.get(identity)
+          if (participant) {
+            const videoPublication = participant.getTrackPublication(Track.Source.Camera)
+            if (videoPublication?.track) {
+              const element = videoPublication.track.attach()
+              return element as HTMLVideoElement
+            }
+          }
+        }
+      }
+
+      return null
+    },
+    []
+  )
+
+  // Get participant audio element
+  const getAudioElement = useCallback((identity: string): HTMLAudioElement | null => {
     const room = roomRef.current
     if (!room) return null
 
+    // Don't attach audio for local participant (causes echo)
     if (identity === room.localParticipant.identity) {
-      // Local participant
-      const videoPublication = room.localParticipant.getTrackPublication(Track.Source.Camera)
-      if (videoPublication?.track) {
-        const element = videoPublication.track.attach()
-        return element as HTMLVideoElement
-      }
-    } else {
-      // Remote participant
-      const participant = room.remoteParticipants.get(identity)
-      if (participant) {
-        const videoPublication = participant.getTrackPublication(Track.Source.Camera)
-        if (videoPublication?.track) {
-          const element = videoPublication.track.attach()
-          return element as HTMLVideoElement
-        }
+      return null
+    }
+
+    // Remote participant
+    const participant = room.remoteParticipants.get(identity)
+    if (participant) {
+      const audioPublication = participant.getTrackPublication(Track.Source.Microphone)
+      if (audioPublication?.track) {
+        const element = audioPublication.track.attach()
+        return element as HTMLAudioElement
       }
     }
 
@@ -383,5 +493,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
     toggleMicrophone,
     toggleScreenShare,
     getVideoElement,
+    getAudioElement,
   }
 }

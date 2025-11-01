@@ -2,6 +2,7 @@ import { createInsertSchema } from 'drizzle-zod'
 import { rooms } from '../schema/rooms.ts'
 import { eq, and, isNull } from 'drizzle-orm'
 import type { Database } from '../db.ts'
+import { generateMeetingCode } from '../../utils/meeting.ts'
 
 export const insertRoomSchema = createInsertSchema(rooms)
 
@@ -42,8 +43,38 @@ class RoomRepository {
       .where(and(eq(rooms.createdBy, creatorId), isNull(rooms.deletedAt)))
   }
 
+  async getByMeetingId(meetingId: string): Promise<Room | undefined> {
+    const result = await this.db
+      .select()
+      .from(rooms)
+      .where(and(eq(rooms.meetingId, meetingId), isNull(rooms.deletedAt)))
+    return result[0]
+  }
+
+  async meetingIdExists(meetingId: string): Promise<boolean> {
+    const result = await this.db.select().from(rooms).where(eq(rooms.meetingId, meetingId))
+    return result.length > 0
+  }
+
   async create(roomData: NewRoom): Promise<Room> {
-    const validatedData = insertRoomSchema.parse(roomData)
+    let meetingId = roomData.meetingId
+
+    // If no meetingId provided, generate a unique one
+    if (!meetingId) {
+      let attempts = 0
+      const maxAttempts = 10
+
+      do {
+        meetingId = generateMeetingCode()
+        attempts++
+
+        if (attempts >= maxAttempts) {
+          throw new Error('Failed to generate unique meeting ID')
+        }
+      } while (await this.meetingIdExists(meetingId))
+    }
+
+    const validatedData = insertRoomSchema.parse({ ...roomData, meetingId })
     const result = await this.db.insert(rooms).values(validatedData).returning()
     return result[0]
   }

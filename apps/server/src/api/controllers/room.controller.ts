@@ -45,6 +45,7 @@ export const createRoom = async (c: Context) => {
         sid: livekitRoom.sid,
         createdBy: userId,
         maxParticipants,
+        // meetingId will be auto-generated in repository
       })
     } catch (dbErr) {
       try {
@@ -79,14 +80,14 @@ export const joinRoom = async (c: Context) => {
       return c.json({ error: API_ERRORS.BAD_REQUEST }, 400)
     }
 
-    const { roomId } = validate.data
+    const { meetingId } = validate.data
     const userId = c.get('userId')
 
     if (!userId) {
       return c.json({ error: API_ERRORS.UNAUTHORIZED }, 401)
     }
 
-    const room = await roomRepository(db).getById(roomId)
+    const room = await roomRepository(db).getByMeetingId(meetingId)
     if (!room) {
       return c.json({ error: API_ERRORS.ROOM_NOT_FOUND }, 404)
     }
@@ -95,15 +96,46 @@ export const joinRoom = async (c: Context) => {
       return c.json({ error: API_ERRORS.ROOM_INACTIVE }, 410)
     }
 
-    const existingParticipant = await participantRepository(db).getActiveByRoomAndUser(
-      roomId,
-      userId
-    )
-    if (existingParticipant) {
-      return c.json({ error: API_ERRORS.ALREADY_IN_ROOM }, 409)
+    // Cleanup stale participants (those who didn't properly leave)
+    // This helps when users close browser without leaving
+    const cleanedUp = await participantRepository(db).cleanupStaleParticipants(room.id, 24)
+    if (cleanedUp > 0) {
+      logger.info({ roomId: room.id, cleanedUp }, 'Cleaned up stale participants')
     }
 
-    const participantCount = await participantRepository(db).getParticipantCount(roomId)
+    const existingParticipant = await participantRepository(db).getActiveByRoomAndUser(
+      room.id,
+      userId
+    )
+
+    // If participant already exists (e.g., browser refresh), allow rejoin with new token
+    if (existingParticipant) {
+      const user = await userRepository(db).getById(userId)
+      if (!user) {
+        return c.json({ error: API_ERRORS.USER_NOT_FOUND }, 404)
+      }
+
+      // Generate new token for existing participant
+      const token = await livekit.generateToken(room.name, existingParticipant.identity, user.name)
+
+      logger.info(
+        { roomId: room.id, userId, identity: existingParticipant.identity },
+        'User rejoining room with existing identity'
+      )
+
+      return c.json(
+        {
+          data: {
+            token,
+            room,
+            participant: existingParticipant,
+          },
+        },
+        200
+      )
+    }
+
+    const participantCount = await participantRepository(db).getParticipantCount(room.id)
     if (room.maxParticipants && participantCount >= room.maxParticipants) {
       return c.json({ error: API_ERRORS.ROOM_FULL }, 409)
     }
@@ -123,7 +155,7 @@ export const joinRoom = async (c: Context) => {
       isAdmin: room.createdBy === userId,
     })
 
-    logger.info({ roomId, userId, identity }, 'User joined room')
+    logger.info({ roomId: room.id, userId, identity }, 'User joined room')
 
     return c.json(
       {
@@ -146,8 +178,8 @@ export const leaveRoom = async (c: Context) => {
   const db = c.get('db')
 
   try {
-    const roomId = c.req.param('roomId')
-    const validate = leaveRoomValidator({ roomId })
+    const meetingId = c.req.param('meetingId')
+    const validate = leaveRoomValidator({ meetingId })
 
     if (!validate.success) {
       logger.warn({ error: validate.error }, 'Invalid leave room request')
@@ -159,14 +191,19 @@ export const leaveRoom = async (c: Context) => {
       return c.json({ error: API_ERRORS.UNAUTHORIZED }, 401)
     }
 
-    const participant = await participantRepository(db).getActiveByRoomAndUser(roomId, userId)
+    const room = await roomRepository(db).getByMeetingId(meetingId)
+    if (!room) {
+      return c.json({ error: API_ERRORS.ROOM_NOT_FOUND }, 404)
+    }
+
+    const participant = await participantRepository(db).getActiveByRoomAndUser(room.id, userId)
     if (!participant) {
       return c.json({ error: API_ERRORS.PARTICIPANT_NOT_FOUND }, 404)
     }
 
     await participantRepository(db).markAsLeft(participant.id)
 
-    logger.info({ roomId, userId, participantId: participant.id }, 'User left room')
+    logger.info({ roomId: room.id, userId, participantId: participant.id }, 'User left room')
 
     return c.json({ data: { message: 'Left room successfully' } }, 200)
   } catch (error) {
@@ -181,8 +218,8 @@ export const endRoom = async (c: Context) => {
   const livekit = c.get('livekit')
 
   try {
-    const roomId = c.req.param('roomId')
-    const validate = endRoomValidator({ roomId })
+    const meetingId = c.req.param('meetingId')
+    const validate = endRoomValidator({ meetingId })
 
     if (!validate.success) {
       logger.warn({ error: validate.error }, 'Invalid end room request')
@@ -194,7 +231,7 @@ export const endRoom = async (c: Context) => {
       return c.json({ error: API_ERRORS.UNAUTHORIZED }, 401)
     }
 
-    const room = await roomRepository(db).getById(roomId)
+    const room = await roomRepository(db).getByMeetingId(meetingId)
     if (!room) {
       return c.json({ error: API_ERRORS.ROOM_NOT_FOUND }, 404)
     }
@@ -205,11 +242,11 @@ export const endRoom = async (c: Context) => {
 
     await livekit.deleteRoom(room.name)
 
-    await roomRepository(db).softDelete(roomId)
+    await roomRepository(db).softDelete(room.id)
 
-    await participantRepository(db).markAsLeftByRoomId(roomId)
+    await participantRepository(db).markAsLeftByRoomId(room.id)
 
-    logger.info({ roomId, userId }, 'Room ended by admin')
+    logger.info({ roomId: room.id, userId }, 'Room ended by admin')
 
     return c.json({ data: { message: 'Room ended successfully' } }, 200)
   } catch (error) {
@@ -223,20 +260,20 @@ export const getRoomParticipants = async (c: Context) => {
   const db = c.get('db')
 
   try {
-    const roomId = c.req.param('roomId')
-    const validate = getRoomParticipantsValidator({ roomId })
+    const meetingId = c.req.param('meetingId')
+    const validate = getRoomParticipantsValidator({ meetingId })
 
     if (!validate.success) {
       logger.warn({ error: validate.error }, 'Invalid get participants request')
       return c.json({ error: API_ERRORS.BAD_REQUEST }, 400)
     }
 
-    const room = await roomRepository(db).getById(roomId)
+    const room = await roomRepository(db).getByMeetingId(meetingId)
     if (!room) {
       return c.json({ error: API_ERRORS.ROOM_NOT_FOUND }, 404)
     }
 
-    const participants = await participantRepository(db).getActiveByRoomId(roomId)
+    const participants = await participantRepository(db).getActiveByRoomId(room.id)
 
     return c.json({ data: { participants } }, 200)
   } catch (error) {
@@ -251,9 +288,9 @@ export const removeParticipant = async (c: Context) => {
   const livekit = c.get('livekit')
 
   try {
-    const roomId = c.req.param('roomId')
+    const meetingId = c.req.param('meetingId')
     const participantId = c.req.param('participantId')
-    const validate = removeParticipantValidator({ roomId, participantId })
+    const validate = removeParticipantValidator({ meetingId, participantId })
 
     if (!validate.success) {
       logger.warn({ error: validate.error }, 'Invalid remove participant request')
@@ -265,7 +302,7 @@ export const removeParticipant = async (c: Context) => {
       return c.json({ error: API_ERRORS.UNAUTHORIZED }, 401)
     }
 
-    const room = await roomRepository(db).getById(roomId)
+    const room = await roomRepository(db).getByMeetingId(meetingId)
     if (!room) {
       return c.json({ error: API_ERRORS.ROOM_NOT_FOUND }, 404)
     }
@@ -275,7 +312,7 @@ export const removeParticipant = async (c: Context) => {
     }
 
     const participant = await participantRepository(db).getById(participantId)
-    if (!participant || participant.roomId !== roomId) {
+    if (!participant || participant.roomId !== room.id) {
       return c.json({ error: API_ERRORS.PARTICIPANT_NOT_FOUND }, 404)
     }
 
@@ -296,7 +333,7 @@ export const removeParticipant = async (c: Context) => {
 
     await participantRepository(db).markAsLeft(participant.id)
 
-    logger.info({ roomId, participantId, userId }, 'Participant removed by admin')
+    logger.info({ roomId: room.id, participantId, userId }, 'Participant removed by admin')
 
     return c.json({ data: { message: 'Participant removed successfully' } }, 200)
   } catch (error) {
@@ -329,14 +366,14 @@ export const getRoomDetails = async (c: Context) => {
   const db = c.get('db')
 
   try {
-    const roomId = c.req.param('roomId')
+    const meetingId = c.req.param('meetingId')
 
-    const room = await roomRepository(db).getById(roomId)
+    const room = await roomRepository(db).getByMeetingId(meetingId)
     if (!room) {
       return c.json({ error: API_ERRORS.ROOM_NOT_FOUND }, 404)
     }
 
-    const participantCount = await participantRepository(db).getParticipantCount(roomId)
+    const participantCount = await participantRepository(db).getParticipantCount(room.id)
 
     return c.json(
       {

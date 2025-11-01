@@ -15,7 +15,6 @@ import { useDmsStore } from '@/store/dms'
 import { useGroupsStore } from '@/store/groups'
 import { Plus, Search, Video, Tag as TagIcon, X, Edit2, Trash2, PhoneCall } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
-import { VideoRoom } from '@/components/room'
 import { roomService } from '@/services/room/room.service'
 
 // Debug logging
@@ -179,22 +178,9 @@ export default function CallsPage() {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [editingCall, setEditingCall] = React.useState<Call | null>(null)
   const { groups } = useGroupsStore()
+  const navigate = useNavigate()
 
-  // LiveKit state
-  const [activeRoom, setActiveRoom] = React.useState<{
-    roomId: string
-    roomName: string
-    token: string
-    isAdmin: boolean
-  } | null>(null)
   const [isCreatingRoom, setIsCreatingRoom] = React.useState(false)
-  const isLeavingRef = React.useRef(false)
-
-  const LIVEKIT_SERVER_URL = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
-
-  React.useEffect(() => {
-    log('LiveKit Server URL:', LIVEKIT_SERVER_URL)
-  }, [LIVEKIT_SERVER_URL])
 
   // Form state
   const [formTitle, setFormTitle] = React.useState('')
@@ -355,32 +341,16 @@ export default function CallsPage() {
       const room = createResponse.data.room
       log('Step 1 ✓: Room created:', room.id)
 
-      // Join room
-      log('Step 2: Joining room...')
-      const joinResponse = await roomService.joinRoom({
-        roomId: room.id,
-      })
-
-      const { token, participant } = joinResponse.data
-      log('Step 2 ✓: Joined room, token received, participant:', participant.id)
-
-      // Set active room
-      log('Step 3: Setting active room state')
-      setActiveRoom({
-        roomId: room.id,
-        roomName: room.name,
-        token,
-        isAdmin: participant.isAdmin,
-      })
-      isLeavingRef.current = false
-      log('Step 3 ✓: Active room set')
-
       setIsDialogOpen(false)
       resetForm()
 
-      toast.success(`Joined room: ${room.name}`, {
+      toast.success(`Room created: ${room.name}`, {
         style: { background: '#171717', color: '#00ff00' },
       })
+
+      // Navigate to the call page
+      log('Navigating to call page:', `/call/${room.meetingId}`)
+      navigate(`/call/${room.meetingId}`)
     } catch (err) {
       error('Failed to create and join room:', err)
       toast.error(err instanceof Error ? err.message : 'Failed to create room', {
@@ -391,83 +361,12 @@ export default function CallsPage() {
     }
   }
 
-  // Leave room
-  const handleLeaveRoom = async () => {
-    if (!activeRoom) {
-      log('No active room to leave')
-      return
-    }
-
-    if (isLeavingRef.current) {
-      log('Already leaving room, skipping...')
-      return
-    }
-
-    log('Leaving room:', activeRoom.roomId)
-    isLeavingRef.current = true
-
-    try {
-      await roomService.leaveRoom(activeRoom.roomId)
-      log('✓ Successfully left room')
-      setActiveRoom(null)
-      isLeavingRef.current = false
-      toast.success('You have left the room', {
-        style: { background: '#171717', color: '#00ff00' },
-      })
-    } catch (err) {
-      error('Failed to leave room:', err)
-      // Clear active room anyway to prevent being stuck
-      setActiveRoom(null)
-      isLeavingRef.current = false
-    }
-  }
-
-  // End room (admin only)
-  const handleEndRoom = async () => {
-    if (!activeRoom) {
-      log('No active room to end')
-      return
-    }
-
-    if (isLeavingRef.current) {
-      log('Already ending room, skipping...')
-      return
-    }
-
-    log('Ending room:', activeRoom.roomId)
-    isLeavingRef.current = true
-
-    try {
-      await roomService.endRoom(activeRoom.roomId)
-      log('✓ Successfully ended room')
-      setActiveRoom(null)
-      isLeavingRef.current = false
-      toast.success('The room has been ended for all participants', {
-        style: { background: '#171717', color: '#00ff00' },
-      })
-    } catch (err) {
-      error('Failed to end room:', err)
-      toast.error(err instanceof Error ? err.message : 'Failed to end room', {
-        style: { background: '#171717', color: '#ff8800' },
-      })
-      setActiveRoom(null)
-      isLeavingRef.current = false
-    }
-  }
-
-  // If in active room, show video room
-  if (activeRoom) {
-    log('Rendering VideoRoom component')
-    return (
-      <VideoRoom
-        roomName={activeRoom.roomName}
-        token={activeRoom.token}
-        serverUrl={LIVEKIT_SERVER_URL}
-        isAdmin={activeRoom.isAdmin}
-        onLeave={handleLeaveRoom}
-        onEndRoom={activeRoom.isAdmin ? handleEndRoom : undefined}
-      />
-    )
+  // Handle joining an existing call
+  const handleJoinCall = (call: Call) => {
+    log('Joining existing call:', call.title)
+    setFormTitle(call.title)
+    setFormType(call.type)
+    handleCreateAndJoinRoom()
   }
 
   return (
@@ -696,12 +595,7 @@ export default function CallsPage() {
                   call={call}
                   onEdit={openEditDialog}
                   onDelete={handleDeleteCall}
-                  onJoin={() => {
-                    // Set form values and trigger quick join
-                    setFormTitle(call.title)
-                    setFormType(call.type)
-                    handleCreateAndJoinRoom()
-                  }}
+                  onJoin={handleJoinCall}
                 />
               ))
             ) : (

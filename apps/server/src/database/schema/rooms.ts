@@ -3,6 +3,7 @@ import { users } from './users.ts'
 
 export const rooms = pgTable('rooms', {
   id: uuid('id').primaryKey().defaultRandom(),
+  meetingId: text('meeting_id').unique(), // 6-digit meeting code (auto-generated)
   name: text('name').notNull(),
   sid: text('sid').notNull().unique(),
   createdBy: uuid('created_by')

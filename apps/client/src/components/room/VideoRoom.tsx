@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -12,6 +12,11 @@ import {
   Users,
   MoreVertical,
   AlertCircle,
+  Link2,
+  Check,
+  Pin,
+  PinOff,
+  Monitor,
 } from 'lucide-react'
 import { ParticipantVideo } from './ParticipantVideo'
 import { useLiveKit } from '@/hooks/useLiveKit'
@@ -62,6 +67,7 @@ export function VideoRoom({
     toggleMicrophone,
     toggleScreenShare,
     getVideoElement,
+    getAudioElement,
   } = useLiveKit({
     serverUrl,
     onDisconnected: onLeave,
@@ -72,6 +78,8 @@ export function VideoRoom({
 
   const [isScreenSharing, setIsScreenSharing] = useState(false)
   const [showParticipantList, setShowParticipantList] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
+  const [pinnedParticipant, setPinnedParticipant] = useState<string | null>(null)
   const hasConnectedRef = useRef(false)
 
   useEffect(() => {
@@ -123,9 +131,28 @@ export function VideoRoom({
     onEndRoom?.()
   }
 
+  const handleCopyLink = () => {
+    const roomUrl = `${window.location.origin}/call/${window.location.pathname.split('/').pop()}`
+    navigator.clipboard.writeText(roomUrl).then(() => {
+      setLinkCopied(true)
+      log('Copied room link:', roomUrl)
+      setTimeout(() => setLinkCopied(false), 2000)
+    })
+  }
+
   const handleToggleScreenShare = async () => {
     await toggleScreenShare()
     setIsScreenSharing(!isScreenSharing)
+  }
+
+  const handlePinParticipant = (identity: string) => {
+    if (pinnedParticipant === identity) {
+      setPinnedParticipant(null)
+      log('Unpinned participant:', identity)
+    } else {
+      setPinnedParticipant(identity)
+      log('Pinned participant:', identity)
+    }
   }
 
   if (isConnecting) {
@@ -228,8 +255,13 @@ export function VideoRoom({
     )
   }
 
-  const localParticipant = participants.find(p => p.isLocal)
-  const remoteParticipants = participants.filter(p => !p.isLocal)
+  // Determine layout based on pinned state
+  const pinnedParticipantData = pinnedParticipant
+    ? participants.find(p => p.identity === pinnedParticipant)
+    : null
+  const unpinnedParticipants = pinnedParticipant
+    ? participants.filter(p => p.identity !== pinnedParticipant)
+    : null
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -242,6 +274,19 @@ export function VideoRoom({
               <Users className="mr-1 h-3 w-3" />
               {participants.length}
             </Badge>
+            <Button variant="outline" size="sm" onClick={handleCopyLink} className="gap-2">
+              {linkCopied ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Link2 className="h-4 w-4" />
+                  Copy Link
+                </>
+              )}
+            </Button>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -285,7 +330,83 @@ export function VideoRoom({
                 <p>No participants yet</p>
               </div>
             </div>
+          ) : pinnedParticipantData ? (
+            // Pinned layout - large pinned view with small thumbnails
+            <div className="flex h-full gap-4">
+              {/* Main pinned view */}
+              <div className="flex-1 relative group">
+                <ParticipantVideo
+                  identity={pinnedParticipantData.identity}
+                  name={pinnedParticipantData.name || pinnedParticipantData.identity}
+                  videoTrack={pinnedParticipantData.videoTrack}
+                  audioTrack={pinnedParticipantData.audioTrack}
+                  screenShareTrack={pinnedParticipantData.screenShareTrack}
+                  isSpeaking={pinnedParticipantData.isSpeaking}
+                  isMuted={pinnedParticipantData.isLocal ? !isMicrophoneEnabled : undefined}
+                  isVideoOff={pinnedParticipantData.isLocal ? !isCameraEnabled : undefined}
+                  isLocal={pinnedParticipantData.isLocal}
+                  isScreenShare={pinnedParticipantData.isScreenShare}
+                  getVideoElement={() =>
+                    getVideoElement(
+                      pinnedParticipantData.identity,
+                      pinnedParticipantData.isScreenShare
+                    )
+                  }
+                  getAudioElement={() => getAudioElement(pinnedParticipantData.identity)}
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => handlePinParticipant(pinnedParticipantData.identity)}
+                >
+                  <PinOff className="h-4 w-4 mr-2" />
+                  Unpin
+                </Button>
+              </div>
+
+              {/* Thumbnail strip */}
+              {unpinnedParticipants && unpinnedParticipants.length > 0 && (
+                <div className="w-64 flex flex-col gap-3 overflow-y-auto">
+                  {unpinnedParticipants.map(participant => (
+                    <div key={participant.identity} className="relative group">
+                      <ParticipantVideo
+                        identity={participant.identity}
+                        name={participant.name || participant.identity}
+                        videoTrack={participant.videoTrack}
+                        audioTrack={participant.audioTrack}
+                        screenShareTrack={participant.screenShareTrack}
+                        isSpeaking={participant.isSpeaking}
+                        isMuted={participant.isLocal ? !isMicrophoneEnabled : undefined}
+                        isVideoOff={participant.isLocal ? !isCameraEnabled : undefined}
+                        isLocal={participant.isLocal}
+                        isScreenShare={participant.isScreenShare}
+                        getVideoElement={() =>
+                          getVideoElement(participant.identity, participant.isScreenShare)
+                        }
+                        getAudioElement={() => getAudioElement(participant.identity)}
+                      />
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
+                        onClick={() => handlePinParticipant(participant.identity)}
+                      >
+                        <Pin className="h-3 w-3" />
+                      </Button>
+                      {participant.isScreenShare && (
+                        <Badge className="absolute top-2 left-2 bg-blue-500">
+                          <Monitor className="h-3 w-3 mr-1" />
+                          Screen
+                        </Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           ) : (
+            // Default grid layout
             <div
               className={cn(
                 'grid h-full gap-4',
@@ -296,33 +417,39 @@ export function VideoRoom({
                 participants.length >= 10 && 'grid-cols-4'
               )}
             >
-              {/* Local participant */}
-              {localParticipant && (
-                <ParticipantVideo
-                  identity={localParticipant.identity}
-                  name={localParticipant.name || 'You'}
-                  videoTrack={localParticipant.videoTrack}
-                  audioTrack={localParticipant.audioTrack}
-                  isSpeaking={localParticipant.isSpeaking}
-                  isMuted={!isMicrophoneEnabled}
-                  isVideoOff={!isCameraEnabled}
-                  isLocal={true}
-                  getVideoElement={() => getVideoElement(localParticipant.identity)}
-                />
-              )}
-
-              {/* Remote participants */}
-              {remoteParticipants.map(participant => (
-                <ParticipantVideo
-                  key={participant.identity}
-                  identity={participant.identity}
-                  name={participant.name || participant.identity}
-                  videoTrack={participant.videoTrack}
-                  audioTrack={participant.audioTrack}
-                  isSpeaking={participant.isSpeaking}
-                  isLocal={false}
-                  getVideoElement={() => getVideoElement(participant.identity)}
-                />
+              {participants.map(participant => (
+                <div key={participant.identity} className="relative group">
+                  <ParticipantVideo
+                    identity={participant.identity}
+                    name={participant.name || participant.identity}
+                    videoTrack={participant.videoTrack}
+                    audioTrack={participant.audioTrack}
+                    screenShareTrack={participant.screenShareTrack}
+                    isSpeaking={participant.isSpeaking}
+                    isMuted={participant.isLocal ? !isMicrophoneEnabled : undefined}
+                    isVideoOff={participant.isLocal ? !isCameraEnabled : undefined}
+                    isLocal={participant.isLocal}
+                    isScreenShare={participant.isScreenShare}
+                    getVideoElement={() =>
+                      getVideoElement(participant.identity, participant.isScreenShare)
+                    }
+                    getAudioElement={() => getAudioElement(participant.identity)}
+                  />
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => handlePinParticipant(participant.identity)}
+                  >
+                    <Pin className="h-4 w-4" />
+                  </Button>
+                  {participant.isScreenShare && (
+                    <Badge className="absolute top-2 left-2 bg-blue-500">
+                      <Monitor className="h-3 w-3 mr-1" />
+                      Screen
+                    </Badge>
+                  )}
+                </div>
               ))}
             </div>
           )}
