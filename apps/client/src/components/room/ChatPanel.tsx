@@ -95,7 +95,7 @@ export function ChatPanel({
                 {isSystemMessage(message) ? (
                   <div className="flex items-start gap-2 rounded-lg bg-blue-500/10 border border-blue-500/20 px-3 py-2 text-blue-600 dark:text-blue-400">
                     <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <p className="text-sm">{message.message}</p>
+                    <p className="text-sm whitespace-pre-wrap">{message.message}</p>
                   </div>
                 ) : (
                   <>
