@@ -12,7 +12,6 @@ import {
   LocalAudioTrack,
 } from 'livekit-client'
 
-// Debug logging helper
 const DEBUG = true
 const log = (...args: unknown[]) => {
   if (DEBUG) console.log('[useLiveKit]', ...args)
@@ -36,7 +35,7 @@ export interface ParticipantInfo {
   screenShareTrack?: RemoteTrack | MediaStreamTrack
   isLocal: boolean
   isScreenShare?: boolean
-  screenShareIdentity?: string // The identity of the participant sharing
+  screenShareIdentity?: string
 }
 
 export interface ChatMessage {
@@ -79,19 +78,19 @@ export function useLiveKit(options: UseLiveKitOptions) {
   const [localAudioTrack, setLocalAudioTrack] = useState<LocalAudioTrack | null>(null)
   const [isCameraEnabled, setIsCameraEnabled] = useState(false)
   const [isMicrophoneEnabled, setIsMicrophoneEnabled] = useState(false)
+  const [isTranscriptionEnabled, setIsTranscriptionEnabled] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
+  const [transcriptions, setTranscriptions] = useState<Transcription[]>([])
   const [roomCreatedAt, setRoomCreatedAt] = useState<string | null>(null)
 
-  // Update participants list
   const updateParticipants = useCallback(() => {
     const room = roomRef.current
     if (!room) return
 
     const participantMap = new Map<string, ParticipantInfo>()
 
-    // Add local participant
     const localParticipant = room.localParticipant
     const localVideoPublication = localParticipant.getTrackPublication(Track.Source.Camera)
     const localAudioPublication = localParticipant.getTrackPublication(Track.Source.Microphone)
@@ -105,7 +104,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
       audioEnabled: localParticipant.isMicrophoneEnabled,
     })
 
-    // Add local participant (camera)
     participantMap.set(localParticipant.identity, {
       identity: localParticipant.identity,
       name: localParticipant.name || 'You',
@@ -117,7 +115,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
       isScreenShare: false,
     })
 
-    // Add local screen share as separate tile if sharing
     if (localScreenPublication?.track) {
       participantMap.set(`${localParticipant.identity}_screen`, {
         identity: `${localParticipant.identity}_screen`,
@@ -130,7 +127,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
       })
     }
 
-    // Add remote participants
     room.remoteParticipants.forEach((participant: RemoteParticipant) => {
       const videoPublication = participant.getTrackPublication(Track.Source.Camera)
       const audioPublication = participant.getTrackPublication(Track.Source.Microphone)
@@ -144,7 +140,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
         audioSubscribed: audioPublication?.isSubscribed,
       })
 
-      // Add remote participant (camera)
       participantMap.set(participant.identity, {
         identity: participant.identity,
         name: participant.name || participant.identity,
@@ -156,7 +151,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
         isScreenShare: false,
       })
 
-      // Add remote screen share as separate tile if sharing
       if (screenPublication?.track) {
         participantMap.set(`${participant.identity}_screen`, {
           identity: `${participant.identity}_screen`,
@@ -174,10 +168,8 @@ export function useLiveKit(options: UseLiveKitOptions) {
     setParticipants(participantMap)
   }, [])
 
-  // Connect to room
   const connect = useCallback(
     async (token: string) => {
-      // Prevent multiple connections
       if (isConnectingRef.current) {
         log('Already connecting, skipping...')
         return
@@ -194,7 +186,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
         setIsConnecting(true)
         setError(null)
 
-        // Create room with optimal settings
         log('Creating Room instance...')
         const room = new Room({
           adaptiveStream: true,
@@ -206,7 +197,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
 
         log('Server URL:', serverUrl)
 
-        // Set up event listeners
         room
           .on(
             RoomEvent.TrackSubscribed,
@@ -233,7 +223,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
           .on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
             log('Participant connected:', participant.identity)
 
-            // Add system message for participant join
             const systemMessage: ChatMessage = {
               id: `system-join-${Date.now()}-${participant.identity}`,
               participantIdentity: 'system',
@@ -249,7 +238,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
           .on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
             log('Participant disconnected:', participant.identity)
 
-            // Add system message for participant leave
             const systemMessage: ChatMessage = {
               id: `system-leave-${Date.now()}-${participant.identity}`,
               participantIdentity: 'system',
@@ -268,7 +256,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
           .on(RoomEvent.LocalTrackPublished, (publication: LocalTrackPublication) => {
             log('Local track published:', publication.kind)
 
-            // Announce screen share start
             if (publication.source === Track.Source.ScreenShare) {
               const systemMessage: ChatMessage = {
                 id: `system-screenshare-start-${Date.now()}-local`,
@@ -286,7 +273,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
           .on(RoomEvent.LocalTrackUnpublished, (publication: LocalTrackPublication) => {
             log('Local track unpublished:', publication.kind)
 
-            // Announce screen share stop
             if (publication.source === Track.Source.ScreenShare) {
               const systemMessage: ChatMessage = {
                 id: `system-screenshare-stop-${Date.now()}-local`,
@@ -329,7 +315,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
             (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
               log('Remote track published:', publication.source, participant.identity)
 
-              // Announce remote screen share start (local is handled by LocalTrackPublished)
               if (
                 publication.source === Track.Source.ScreenShare &&
                 participant.identity !== room.localParticipant.identity
@@ -353,7 +338,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
             (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
               log('Remote track unpublished:', publication.source, participant.identity)
 
-              // Announce remote screen share stop (local is handled by LocalTrackUnpublished)
               if (
                 publication.source === Track.Source.ScreenShare &&
                 participant.identity !== room.localParticipant.identity
@@ -396,10 +380,60 @@ export function useLiveKit(options: UseLiveKitOptions) {
             }
           })
 
-        // Connect to room
         log('Connecting to LiveKit server...')
         await room.connect(serverUrl, token)
         log('✓ Connected to room:', room.name)
+
+        log('📝 Registering text stream handler for lk.transcription')
+        room.registerTextStreamHandler('lk.transcription', async (reader, participant) => {
+          try {
+            log('📥 Text stream received from:', participant?.identity)
+            const message = await reader.readAll()
+            const isFinal = reader.info?.attributes?.['lk.transcription_final'] === 'true'
+            const segmentId = reader.info?.attributes?.['lk.segment_id']
+            const transcribedTrackId = reader.info?.attributes?.['lk.transcribed_track_id']
+
+            log('📝 Stream attributes:', {
+              isFinal,
+              segmentId,
+              transcribedTrackId,
+              messageLength: message.length,
+              allAttributes: reader.info?.attributes,
+            })
+
+            if (transcribedTrackId) {
+              const transcription: Transcription = {
+                id: `${segmentId || Date.now()}-${participant?.identity || 'unknown'}`,
+                participantIdentity: participant?.identity || 'unknown',
+                participantName: participant?.identity || 'Unknown',
+                text: message,
+                isFinal,
+                timestamp: Date.now(),
+              }
+
+              log('✅ Transcription received:', {
+                isFinal,
+                segmentId,
+                text: message.substring(0, 100),
+                participant: participant?.identity,
+              })
+
+              setTranscriptions(prev => {
+                const newTranscriptions = isFinal
+                  ? [...prev.filter(t => t.id !== transcription.id), transcription]
+                  : [...prev.filter(t => t.id !== transcription.id), transcription]
+
+                log('📊 Transcriptions state updated. Total:', newTranscriptions.length)
+                return newTranscriptions
+              })
+            } else {
+              log('⚠️ Received text stream without transcribedTrackId - not a transcription')
+            }
+          } catch (err) {
+            logError('❌ Failed to process transcription stream:', err)
+          }
+        })
+        log('✓ Text stream handler registered successfully')
 
         roomRef.current = room
         isConnectingRef.current = false
@@ -419,7 +453,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
     [serverUrl, onDisconnected, onError, updateParticipants]
   )
 
-  // Disconnect from room
   const disconnect = useCallback(async () => {
     if (isDisconnectingRef.current) {
       log('Already disconnecting, skipping...')
@@ -452,7 +485,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
     }
   }, [])
 
-  // Enable/disable camera
   const toggleCamera = useCallback(async () => {
     const room = roomRef.current
     if (!room) {
@@ -467,7 +499,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
       setIsCameraEnabled(enabled)
       log('✓ Camera toggled successfully')
 
-      // Update local video track reference
       if (enabled) {
         const publication = room.localParticipant.getTrackPublication(Track.Source.Camera)
         if (publication?.track instanceof LocalVideoTrack) {
@@ -485,7 +516,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
     }
   }, [isCameraEnabled, updateParticipants])
 
-  // Enable/disable microphone
   const toggleMicrophone = useCallback(async () => {
     const room = roomRef.current
     if (!room) {
@@ -500,7 +530,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
       setIsMicrophoneEnabled(enabled)
       log('✓ Microphone toggled successfully')
 
-      // Update local audio track reference
       if (enabled) {
         const publication = room.localParticipant.getTrackPublication(Track.Source.Microphone)
         if (publication?.track instanceof LocalAudioTrack) {
@@ -518,7 +547,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
     }
   }, [isMicrophoneEnabled, updateParticipants])
 
-  // Enable screen share
   const toggleScreenShare = useCallback(async () => {
     const room = roomRef.current
     if (!room) {
@@ -539,18 +567,78 @@ export function useLiveKit(options: UseLiveKitOptions) {
     }
   }, [updateParticipants])
 
-  // Get participant video element (camera or screen share)
+  const toggleTranscription = useCallback(async () => {
+    const room = roomRef.current
+    if (!room) {
+      logError('Cannot toggle transcription: no room')
+      return
+    }
+
+    try {
+      const newState = !isTranscriptionEnabled
+      log('🎙️ Toggling transcription:', newState ? 'ON' : 'OFF')
+
+      setIsTranscriptionEnabled(newState)
+
+      // Trigger STT agent to join/leave room
+      const roomName = room.name
+      const endpoint = newState ? `/api/stt/join/${roomName}` : `/api/stt/leave/${roomName}`
+
+      log(`📡 ${newState ? 'Starting' : 'Stopping'} STT agent for room: ${roomName}`)
+
+      try {
+        const response = await fetch(`http://localhost:8000${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error(`STT agent ${newState ? 'join' : 'leave'} failed`)
+        }
+
+        const result = await response.json()
+        log('✓ STT agent response:', result)
+      } catch (apiErr) {
+        logError('STT agent API error:', apiErr)
+        // Continue anyway - the data message below will still work if agent is manually started
+      }
+
+      // Also publish data message to room for other participants
+      const encoder = new TextEncoder()
+      const data = encoder.encode(
+        JSON.stringify({
+          type: 'transcription_state',
+          enabled: newState,
+          timestamp: Date.now(),
+        })
+      )
+
+      await room.localParticipant.publishData(data, {
+        reliable: true,
+      })
+
+      log('✓ Transcription toggled successfully')
+      if (newState) {
+        log('🎤 STT agent will transcribe audio and publish to lk.transcription stream')
+      }
+    } catch (err) {
+      logError('Failed to toggle transcription:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Failed to toggle transcription'
+      setError(errorMessage)
+    }
+  }, [isTranscriptionEnabled])
+
   const getVideoElement = useCallback(
     (identity: string, _isScreenShare = false): HTMLVideoElement | null => {
       const room = roomRef.current
       if (!room) return null
 
-      // Handle screen share tiles (identity ends with _screen)
       if (identity.endsWith('_screen')) {
         const actualIdentity = identity.replace('_screen', '')
 
         if (actualIdentity === room.localParticipant.identity) {
-          // Local screen share
           const screenPublication = room.localParticipant.getTrackPublication(
             Track.Source.ScreenShare
           )
@@ -559,7 +647,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
             return element as HTMLVideoElement
           }
         } else {
-          // Remote screen share
           const participant = room.remoteParticipants.get(actualIdentity)
           if (participant) {
             const screenPublication = participant.getTrackPublication(Track.Source.ScreenShare)
@@ -570,16 +657,13 @@ export function useLiveKit(options: UseLiveKitOptions) {
           }
         }
       } else {
-        // Regular camera view
         if (identity === room.localParticipant.identity) {
-          // Local participant camera
           const videoPublication = room.localParticipant.getTrackPublication(Track.Source.Camera)
           if (videoPublication?.track) {
             const element = videoPublication.track.attach()
             return element as HTMLVideoElement
           }
         } else {
-          // Remote participant camera
           const participant = room.remoteParticipants.get(identity)
           if (participant) {
             const videoPublication = participant.getTrackPublication(Track.Source.Camera)
@@ -596,17 +680,14 @@ export function useLiveKit(options: UseLiveKitOptions) {
     []
   )
 
-  // Get participant audio element
   const getAudioElement = useCallback((identity: string): HTMLAudioElement | null => {
     const room = roomRef.current
     if (!room) return null
 
-    // Don't attach audio for local participant (causes echo)
     if (identity === room.localParticipant.identity) {
       return null
     }
 
-    // Remote participant
     const participant = room.remoteParticipants.get(identity)
     if (participant) {
       const audioPublication = participant.getTrackPublication(Track.Source.Microphone)
@@ -619,7 +700,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
     return null
   }, [])
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       log('Component unmounting, cleaning up...')
@@ -639,16 +719,19 @@ export function useLiveKit(options: UseLiveKitOptions) {
     localAudioTrack,
     isCameraEnabled,
     isMicrophoneEnabled,
+    isTranscriptionEnabled,
     error,
     connect,
     disconnect,
     toggleCamera,
     toggleMicrophone,
     toggleScreenShare,
+    toggleTranscription,
     getVideoElement,
     getAudioElement,
     chatMessages,
     bookmarks,
+    transcriptions,
     roomCreatedAt,
     setRoomCreatedAt,
     addSystemMessage: useCallback((message: string) => {
@@ -694,7 +777,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
         }
 
         try {
-          // Handle commands (messages starting with /)
           if (message.startsWith('/')) {
             const [command, ...args] = message.slice(1).split(' ')
             const commandLower = command.toLowerCase()
@@ -814,7 +896,6 @@ Commands are private and only visible to you.`
             }
           }
 
-          // Regular chat message - send to all participants
           const chatData = JSON.stringify({
             type: 'chat',
             message,
@@ -829,7 +910,6 @@ Commands are private and only visible to you.`
             destinationIdentities: [],
           })
 
-          // Add to local messages
           const chatMessage: ChatMessage = {
             id: `${Date.now()}-${room.localParticipant.identity}`,
             participantIdentity: room.localParticipant.identity,

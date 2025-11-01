@@ -38,7 +38,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Check authentication status on mount
+  
   useEffect(() => {
     const checkAuth = () => {
       const authenticated = isAuthenticated()
@@ -49,7 +49,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     checkAuth()
 
-    // Listen for storage changes (multi-tab support)
+    
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'token') {
         checkAuth()

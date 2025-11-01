@@ -9,7 +9,6 @@ export default function GroupsPage() {
   const { setOpen } = useSidebar()
 
   React.useEffect(() => {
-    // Reset the active group when navigating away from the groups page
     return () => {
       setActiveGroup(null)
     }

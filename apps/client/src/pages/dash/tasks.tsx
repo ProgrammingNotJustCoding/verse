@@ -71,7 +71,6 @@ export default function TasksPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false)
   const [editingTask, setEditingTask] = React.useState<Task | null>(null)
 
-  // Form state
   const [formTitle, setFormTitle] = React.useState('')
   const [formDescription, setFormDescription] = React.useState('')
   const [formDeadline, setFormDeadline] = React.useState('')
@@ -120,7 +119,6 @@ export default function TasksPage() {
     if (!formTitle.trim()) return
 
     if (editingTask) {
-      // Update existing task
       setTasks(
         tasks.map(task =>
           task.id === editingTask.id
@@ -135,7 +133,6 @@ export default function TasksPage() {
         )
       )
     } else {
-      // Create new task
       const newTask: Task = {
         id: Date.now().toString(),
         title: formTitle,

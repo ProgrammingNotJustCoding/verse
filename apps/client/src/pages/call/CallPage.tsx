@@ -5,7 +5,6 @@ import { roomService } from '@/services/room/room.service'
 import { Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-// Debug logging
 const DEBUG = true
 const log = (...args: unknown[]) => {
   if (DEBUG) console.log('[CallPage]', ...args)
@@ -49,7 +48,6 @@ export default function CallPage() {
     setErrorMessage(null)
 
     try {
-      // Join the room
       log('Step 1: Joining room...')
       const joinResponse = await roomService.joinRoom({ meetingId })
       const { token, room, participant } = joinResponse.data
@@ -59,7 +57,6 @@ export default function CallPage() {
       log('Participant:', participant.id)
       log('Is admin:', participant.isAdmin)
 
-      // Set room data
       setRoomData({
         roomName: room.name,
         token,
@@ -96,7 +93,6 @@ export default function CallPage() {
       })
     } catch (err) {
       error('Failed to leave room:', err)
-      // Still navigate away even if leave fails
     }
 
     navigate('/dash/calls')
@@ -125,7 +121,6 @@ export default function CallPage() {
     navigate('/dash/calls')
   }
 
-  // Loading state
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -138,7 +133,6 @@ export default function CallPage() {
     )
   }
 
-  // Error state
   if (errorMessage) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -157,7 +151,6 @@ export default function CallPage() {
     )
   }
 
-  // Render video room
   if (roomData) {
     log('Rendering VideoRoom with data:', roomData)
     return (

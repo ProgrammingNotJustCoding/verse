@@ -23,14 +23,14 @@ export function ChatPanel({
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Auto-scroll to bottom when new messages arrive
+  
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [messages])
 
-  // Focus input on mount
+  
   useEffect(() => {
     inputRef.current?.focus()
   }, [])

@@ -45,7 +45,7 @@ export const createRoom = async (c: Context) => {
         sid: livekitRoom.sid,
         createdBy: userId,
         maxParticipants,
-        // meetingId will be auto-generated in repository
+        
       })
     } catch (dbErr) {
       try {
@@ -96,8 +96,8 @@ export const joinRoom = async (c: Context) => {
       return c.json({ error: API_ERRORS.ROOM_INACTIVE }, 410)
     }
 
-    // Cleanup stale participants (those who didn't properly leave)
-    // This helps when users close browser without leaving
+    
+    
     const cleanedUp = await participantRepository(db).cleanupStaleParticipants(room.id, 24)
     if (cleanedUp > 0) {
       logger.info({ roomId: room.id, cleanedUp }, 'Cleaned up stale participants')
@@ -108,14 +108,14 @@ export const joinRoom = async (c: Context) => {
       userId
     )
 
-    // If participant already exists (e.g., browser refresh), allow rejoin with new token
+    
     if (existingParticipant) {
       const user = await userRepository(db).getById(userId)
       if (!user) {
         return c.json({ error: API_ERRORS.USER_NOT_FOUND }, 404)
       }
 
-      // Generate new token for existing participant
+      
       const token = await livekit.generateToken(room.name, existingParticipant.identity, user.name)
 
       logger.info(

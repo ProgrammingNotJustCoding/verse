@@ -19,7 +19,7 @@ export function useAuth() {
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
 
-  // Check authentication status
+  
   useEffect(() => {
     const checkAuth = () => {
       const authenticated = isAuthenticated()
@@ -30,7 +30,7 @@ export function useAuth() {
 
     checkAuth()
 
-    // Listen for storage changes (for multi-tab support)
+    
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'token') {
         checkAuth()
@@ -41,7 +41,7 @@ export function useAuth() {
     return () => window.removeEventListener('storage', handleStorageChange)
   }, [])
 
-  // Sign up function
+  
   const signUp = useCallback(
     async (data: SignUpData) => {
       setLoading(true)
@@ -56,7 +56,7 @@ export function useAuth() {
           return { success: false, error: errorMessage }
         }
 
-        // Update state
+        
         setIsAuth(true)
         setToken(response.data.token)
 
@@ -72,7 +72,7 @@ export function useAuth() {
     []
   )
 
-  // Login function
+  
   const login = useCallback(
     async (data: LoginData) => {
       setLoading(true)
@@ -87,7 +87,7 @@ export function useAuth() {
           return { success: false, error: errorMessage }
         }
 
-        // Update state
+        
         setIsAuth(true)
         setToken(response.data.token)
 
@@ -103,7 +103,7 @@ export function useAuth() {
     []
   )
 
-  // Logout function
+  
   const logout = useCallback(() => {
     removeAuthToken()
     setIsAuth(false)
@@ -112,7 +112,7 @@ export function useAuth() {
     navigate('/auth')
   }, [navigate])
 
-  // Clear error
+  
   const clearError = useCallback(() => {
     setError(null)
   }, [])

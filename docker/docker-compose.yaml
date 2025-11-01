@@ -3,6 +3,7 @@ include:
   - ./compose/livekit/compose.yaml
   - ./compose/minio/compose.yaml
   - ./compose/postgres/compose.yaml
+  - ./compose/whisper/compose.yaml
 
 networks:
   verse-network:

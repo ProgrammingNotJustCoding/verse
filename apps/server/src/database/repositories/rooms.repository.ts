@@ -20,6 +20,10 @@ class RoomRepository {
     return await this.db.select().from(rooms).where(isNull(rooms.deletedAt))
   }
 
+  async getActiveRooms(): Promise<Room[]> {
+    return await this.db.select().from(rooms).where(isNull(rooms.deletedAt))
+  }
+
   async getById(id: string): Promise<Room | undefined> {
     const result = await this.db
       .select()
@@ -59,7 +63,7 @@ class RoomRepository {
   async create(roomData: NewRoom): Promise<Room> {
     let meetingId = roomData.meetingId
 
-    // If no meetingId provided, generate a unique one
+    
     if (!meetingId) {
       let attempts = 0
       const maxAttempts = 10

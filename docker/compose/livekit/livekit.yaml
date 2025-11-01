@@ -15,7 +15,7 @@ rtc:
     - host: coturn
       port: 3478
       protocol: udp # Use 'tls' if forcing TLS on 5349; 'udp' for standard TURN
-      username: "" # Empty for shared secret auth
+      username: "verse" # Username for TURN auth
       credential: verse-turn-secret
 
 redis:

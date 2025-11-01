@@ -18,10 +18,12 @@ import {
   PinOff,
   Monitor,
   MessageSquare,
+  Subtitles,
 } from 'lucide-react'
 import { ParticipantVideo } from './ParticipantVideo'
 import { ChatPanel } from './ChatPanel'
 import { MeetingTimer } from './MeetingTimer'
+import { TranscriptionPanel } from './TranscriptionPanel'
 import { useLiveKit } from '@/hooks/useLiveKit'
 import {
   DropdownMenu,
@@ -31,7 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
-// Debug logging
+
 const DEBUG = true
 const log = (...args: unknown[]) => {
   if (DEBUG) console.log('[VideoRoom]', ...args)
@@ -65,16 +67,19 @@ export function VideoRoom({
     participants,
     isCameraEnabled,
     isMicrophoneEnabled,
+    isTranscriptionEnabled,
     error,
     connect,
     disconnect,
     toggleCamera,
     toggleMicrophone,
     toggleScreenShare,
+    toggleTranscription,
     getVideoElement,
     getAudioElement,
     chatMessages,
     sendChatMessage,
+    transcriptions,
     roomCreatedAt: roomCreatedAtFromHook,
     setRoomCreatedAt,
   } = useLiveKit({
@@ -88,13 +93,23 @@ export function VideoRoom({
   const [isScreenSharing, setIsScreenSharing] = useState(false)
   const [showParticipantList, setShowParticipantList] = useState(false)
   const [showChat, setShowChat] = useState(false)
+  const [showTranscriptions, setShowTranscriptions] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [pinnedParticipant, setPinnedParticipant] = useState<string | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
   const hasConnectedRef = useRef(false)
   const lastReadMessageCountRef = useRef(0)
 
-  // Set room creation time from props
+  
+  useEffect(() => {
+    console.log('🎬 VideoRoom: Transcription state:', {
+      isTranscriptionEnabled,
+      showTranscriptions,
+      transcriptionsCount: transcriptions.length,
+    })
+  }, [isTranscriptionEnabled, showTranscriptions, transcriptions.length])
+
+  
   useEffect(() => {
     if (roomCreatedAt && !roomCreatedAtFromHook) {
       setRoomCreatedAt(roomCreatedAt)
@@ -102,7 +117,7 @@ export function VideoRoom({
   }, [roomCreatedAt, roomCreatedAtFromHook, setRoomCreatedAt])
 
   useEffect(() => {
-    // Prevent multiple connections on remount
+    
     if (hasConnectedRef.current) {
       log('Already connected, skipping mount...')
       return
@@ -111,7 +126,7 @@ export function VideoRoom({
     log('VideoRoom mounted:', { roomName, serverUrl: serverUrl.substring(0, 30) + '...' })
     log('Token preview:', token.substring(0, 20) + '...')
 
-    // Check environment
+    
     if (!serverUrl) {
       logError('⚠️ CRITICAL: serverUrl is empty! Set VITE_LIVEKIT_URL in .env')
       return
@@ -131,17 +146,17 @@ export function VideoRoom({
       hasConnectedRef.current = false
       disconnect()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, [])
 
-  // Track unread messages when chat is closed
+  
   useEffect(() => {
     if (showChat) {
-      // Chat is open, mark all messages as read
+      
       lastReadMessageCountRef.current = chatMessages.length
       setUnreadCount(0)
     } else {
-      // Chat is closed, count new messages
+      
       const newMessages = chatMessages.length - lastReadMessageCountRef.current
       if (newMessages > 0) {
         setUnreadCount(newMessages)
@@ -177,6 +192,12 @@ export function VideoRoom({
   const handleToggleScreenShare = async () => {
     await toggleScreenShare()
     setIsScreenSharing(!isScreenSharing)
+  }
+
+  const handleToggleTranscription = async () => {
+    console.log('🎙️ Transcription button clicked. Current state:', isTranscriptionEnabled)
+    await toggleTranscription()
+    console.log('🎙️ Transcription toggled. New state:', !isTranscriptionEnabled)
   }
 
   const handlePinParticipant = (identity: string) => {
@@ -289,7 +310,7 @@ export function VideoRoom({
     )
   }
 
-  // Determine layout based on pinned state
+  
   const pinnedParticipantData = pinnedParticipant
     ? participants.find(p => p.identity === pinnedParticipant)
     : null
@@ -363,7 +384,7 @@ export function VideoRoom({
               </div>
             </div>
           ) : pinnedParticipantData ? (
-            // Pinned layout - large pinned view with small thumbnails
+            
             <div className="flex h-full gap-4">
               {/* Main pinned view */}
               <div className="flex-1 relative group">
@@ -438,7 +459,7 @@ export function VideoRoom({
               )}
             </div>
           ) : (
-            // Default grid layout
+            
             <div
               className={cn(
                 'grid h-full gap-4',
@@ -495,6 +516,19 @@ export function VideoRoom({
               onSendMessage={sendChatMessage}
               onClose={() => setShowChat(false)}
               participantName={localParticipant?.name || 'You'}
+            />
+          </div>
+        )}
+
+        {/* Transcription panel */}
+        {showTranscriptions && (
+          <div className="w-80 h-full">
+            <TranscriptionPanel
+              transcriptions={transcriptions}
+              onClose={() => {
+                console.log('🎬 Closing transcription panel')
+                setShowTranscriptions(false)
+              }}
             />
           </div>
         )}
@@ -564,6 +598,17 @@ export function VideoRoom({
               <MonitorUp className="h-5 w-5" />
             </Button>
 
+            {/* Transcription toggle */}
+            <Button
+              variant={isTranscriptionEnabled ? 'default' : 'outline'}
+              size="icon"
+              className="h-12 w-12 rounded-full"
+              onClick={handleToggleTranscription}
+              title={isTranscriptionEnabled ? 'Disable Transcription' : 'Enable Transcription'}
+            >
+              <Subtitles className="h-5 w-5" />
+            </Button>
+
             {/* Leave button */}
             <Button
               variant="destructive"
@@ -577,6 +622,18 @@ export function VideoRoom({
           </div>
 
           <div className="flex items-center gap-2">
+            <Button
+              variant={showTranscriptions ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-12 w-12 rounded-full"
+              onClick={() => {
+                console.log('🎬 Transcription panel button clicked. Current:', showTranscriptions)
+                setShowTranscriptions(!showTranscriptions)
+              }}
+              title="Show Transcriptions"
+            >
+              <Subtitles className="h-5 w-5" />
+            </Button>
             <Button
               variant={showChat ? 'secondary' : 'ghost'}
               size="icon"

@@ -62,7 +62,7 @@ const AuthForm: React.FC = () => {
         const errorMessage = getAuthErrorMessage(res)
         toast.error(errorMessage, { style: { background: '#171717', color: '#ff8800' } })
       } else if (res.data?.token) {
-        // Token is already stored by auth service
+        
         setUser({ id: 0, name: formData.name, email: formData.email })
         toast.success('Success!', { style: { background: '#171717', color: '#00ff00' } })
         navigate('/dash')

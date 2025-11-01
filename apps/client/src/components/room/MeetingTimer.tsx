@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Clock } from 'lucide-react'
 
 interface MeetingTimerProps {
-  roomCreatedAt: string | null // ISO timestamp from server
+  roomCreatedAt: string | null 
 }
 
 export function MeetingTimer({ roomCreatedAt }: MeetingTimerProps) {
@@ -14,7 +14,7 @@ export function MeetingTimer({ roomCreatedAt }: MeetingTimerProps) {
       return
     }
 
-    // Initial calculation
+    
     const calculateElapsed = () => {
       const roomStartTime = new Date(roomCreatedAt).getTime()
       const now = Date.now()
@@ -24,7 +24,7 @@ export function MeetingTimer({ roomCreatedAt }: MeetingTimerProps) {
 
     calculateElapsed()
 
-    // Update every second
+    
     const interval = setInterval(calculateElapsed, 1000)
 
     return () => clearInterval(interval)

@@ -38,38 +38,32 @@ export function ParticipantVideo({
   const audioElementRef = useRef<HTMLAudioElement | null>(null)
   const [hasVideoElement, setHasVideoElement] = useState(false)
 
-  // Handle video element (camera or screen share)
   useEffect(() => {
     if (!videoRef.current) return
 
-    // Remove existing video element
     if (videoElementRef.current) {
       videoElementRef.current.remove()
       videoElementRef.current = null
       setHasVideoElement(false)
     }
 
-    // Always try to get video element - let LiveKit determine if track exists
     if (getVideoElement) {
       try {
         const videoElement = getVideoElement()
         if (videoElement) {
-          // Set video element properties
           videoElement.className = 'h-full w-full object-cover'
           videoElement.autoplay = true
           videoElement.playsInline = true
-          videoElement.muted = isLocal // Mute local video to prevent echo
+          videoElement.muted = isLocal
 
           if (isLocal && !_screenShareTrack) {
-            videoElement.style.transform = 'scaleX(-1)' // Mirror local video (but not screen share)
+            videoElement.style.transform = 'scaleX(-1)'
           }
 
-          // Append to container
           videoRef.current.appendChild(videoElement)
           videoElementRef.current = videoElement
           setHasVideoElement(true)
 
-          // Try to play the video
           videoElement.play().catch((err: Error) => {
             console.warn('Failed to play video:', err)
           })
@@ -90,29 +84,23 @@ export function ParticipantVideo({
     }
   }, [_videoTrack, _screenShareTrack, getVideoElement, isLocal])
 
-  // Handle audio element (remote participants only)
   useEffect(() => {
     if (!audioRef.current || isLocal) return
 
-    // Remove existing audio element
     if (audioElementRef.current) {
       audioElementRef.current.remove()
       audioElementRef.current = null
     }
 
-    // Get and attach new audio element if there's an audio track
     if (getAudioElement && audioTrack) {
       try {
         const audioElement = getAudioElement()
         if (audioElement) {
-          // Set audio element properties
           audioElement.autoplay = true
 
-          // Append to container (hidden)
           audioRef.current.appendChild(audioElement)
           audioElementRef.current = audioElement
 
-          // Try to play the audio
           audioElement.play().catch((err: Error) => {
             console.warn('Failed to play audio:', err)
           })

@@ -41,7 +41,7 @@ class ParticipantRepository {
       .from(participants)
       .where(and(eq(participants.roomId, roomId), eq(participants.userId, userId)))
       .orderBy(participants.joinedAt)
-    return result[result.length - 1] // Get latest participation
+    return result[result.length - 1] 
   }
 
   async getActiveByRoomAndUser(roomId: string, userId: string): Promise<Participant | undefined> {
@@ -143,7 +143,7 @@ class ParticipantRepository {
   }
 
   async cleanupStaleParticipants(roomId: string, hoursThreshold = 24): Promise<number> {
-    // Mark participants as left if they've been active for more than the threshold
+    
     const thresholdDate = new Date()
     thresholdDate.setHours(thresholdDate.getHours() - hoursThreshold)
 
@@ -154,8 +154,8 @@ class ParticipantRepository {
         and(
           eq(participants.roomId, roomId),
           isNull(participants.leftAt),
-          // Only cleanup if joined more than threshold hours ago
-          // This catches participants who never properly left
+          
+          
           lt(participants.joinedAt, thresholdDate)
         )
       )

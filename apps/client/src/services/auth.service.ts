@@ -1,6 +1,6 @@
 import { API } from '../utils/api'
 
-// Types matching backend responses
+
 export interface AuthResponse {
   data: {
     token: string
@@ -26,7 +26,7 @@ export interface LoginData {
   password: string
 }
 
-// Token management
+
 export const TOKEN_KEY = 'token'
 
 export const setAuthToken = (token: string): void => {
@@ -45,7 +45,7 @@ export const isAuthenticated = (): boolean => {
   return !!getAuthToken()
 }
 
-// Auth service functions
+
 export async function signUp(data: SignUpData): Promise<AuthResponse | AuthError> {
   try {
     const res = await fetch(`${API.BASE_URL}${API.AUTH.BASE_URL()}${API.AUTH.SIGN_UP()}`, {
@@ -60,7 +60,7 @@ export async function signUp(data: SignUpData): Promise<AuthResponse | AuthError
       return json as AuthError
     }
 
-    // Store token on successful signup
+    
     if (json.data?.token) {
       setAuthToken(json.data.token)
     }
@@ -92,7 +92,7 @@ export async function login(data: LoginData): Promise<AuthResponse | AuthError> 
       return json as AuthError
     }
 
-    // Store token on successful login
+    
     if (json.data?.token) {
       setAuthToken(json.data.token)
     }
@@ -114,17 +114,17 @@ export function logout(): void {
   removeAuthToken()
 }
 
-// Type guard to check if response is an error
+
 export function isAuthError(response: AuthResponse | AuthError): response is AuthError {
   return 'error' in response
 }
 
-// Helper to get error message
+
 export function getAuthErrorMessage(response: AuthError): string {
   return response.error.prettyMessage || response.error.message || 'An error occurred'
 }
 
-// User profile types
+
 export interface User {
   id: string
   name: string
@@ -138,7 +138,7 @@ export interface UserResponse {
   }
 }
 
-// Get current user profile
+
 export async function getCurrentUser(): Promise<UserResponse | AuthError> {
   const token = getAuthToken()
 
