@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import json
 from typing import Dict
 
 from livekit import rtc
@@ -33,27 +34,34 @@ async def entrypoint(job: JobContext):
     ):
         """Forward the transcription and log the transcript in the console"""
         async for ev in stt_stream:
-            if ev.type == stt.SpeechEventType.INTERIM_TRANSCRIPT:
-                print(f"[{participant.identity}] {ev.alternatives[0].text}", end="\r")
-            elif ev.type == stt.SpeechEventType.FINAL_TRANSCRIPT:
-                text = ev.alternatives[0].text
-                print(f"\n🎤 [{participant.identity}]: {text}\n")
-                logger.info(f"Transcription for {participant.identity}: {text}")
+            try:
+                if ev.type == stt.SpeechEventType.INTERIM_TRANSCRIPT:
+                    text = ev.alternatives[0].text
+                    print(f"[{participant.identity}] {text}", end="\r")
 
-                segment = rtc.TranscriptionSegment(
-                    id=f"SG_{asyncio.get_event_loop().time()}",
-                    text=text,
-                    start_time=0,
-                    end_time=0,
-                    language="en",
-                    final=True,
-                )
-                transcription_msg = rtc.Transcription(
-                    participant_identity=participant.identity,
-                    track_sid=track.sid,
-                    segments=[segment],
-                )
-                await job.room.local_participant.publish_transcription(transcription_msg)
+                elif ev.type == stt.SpeechEventType.FINAL_TRANSCRIPT:
+                    text = ev.alternatives[0].text
+                    print(f"\n🎤 [{participant.identity}]: {text}\n")
+                    logger.info(f"📝 Publishing transcription for {participant.identity}: {text}")
+
+                    transcription_data = {
+                        "participant_identity": participant.identity,
+                        "track_sid": track.sid,
+                        "text": text,
+                        "final": True,
+                        "timestamp": asyncio.get_event_loop().time(),
+                    }
+
+                    logger.info(f"📤 Publishing to topic: lk.transcription")
+                    await job.room.local_participant.publish_data(
+                        payload=json.dumps(transcription_data).encode('utf-8'),
+                        topic="lk.transcription",
+                        reliable=True,
+                    )
+                    logger.info(f"✅ Data published successfully")
+
+            except Exception as e:
+                logger.error(f"❌ Error publishing transcription: {e}", exc_info=True)
 
     async def transcribe_track(participant: rtc.RemoteParticipant, track: rtc.Track):
         """Transcribe audio from a track"""
@@ -98,6 +106,7 @@ async def entrypoint(job: JobContext):
 
     logger.info(f"Caption agent ready in room: {job.room.name}")
     print(f"\n✅ Caption agent is now listening in room: {job.room.name}\n")
+    logger.info(f"🔑 Local participant identity: {job.room.local_participant.identity}")
 
 async def request_fnc(req):
     """Accept all room requests automatically"""

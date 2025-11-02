@@ -356,9 +356,65 @@ export function useLiveKit(options: UseLiveKitOptions) {
               updateParticipants()
             }
           )
-          .on(RoomEvent.DataReceived, (payload, participant) => {
+          .on(RoomEvent.DataReceived, (payload, participant, kind, topic) => {
             const decoder = new TextDecoder()
             const data = decoder.decode(payload)
+
+            log('📦 Data received:', {
+              topic,
+              participant: participant?.identity,
+              kind,
+              dataLength: data.length,
+            })
+
+            if (topic === 'lk.transcription') {
+              try {
+                const transcriptionData = JSON.parse(data)
+                log('📝 Transcription data parsed:', transcriptionData)
+
+                const speakerIdentity = transcriptionData.participant_identity
+
+                const room = roomRef.current
+                let speakerName = 'Unknown'
+
+                if (room) {
+                  if (speakerIdentity === room.localParticipant.identity) {
+                    speakerName = room.localParticipant.name || 'You'
+                  } else {
+                    const speakerParticipant = room.remoteParticipants.get(speakerIdentity)
+                    if (speakerParticipant) {
+                      speakerName = speakerParticipant.name || speakerParticipant.identity
+                    }
+                  }
+                }
+
+                const transcription: Transcription = {
+                  id: `${Date.now()}-${speakerIdentity}`,
+                  participantIdentity: speakerIdentity,
+                  participantName: speakerName,
+                  text: transcriptionData.text || data,
+                  isFinal: transcriptionData.final === true,
+                  timestamp: Date.now(),
+                }
+
+                log('✅ Transcription created:', {
+                  id: transcription.id,
+                  speaker: speakerName,
+                  text: transcription.text.substring(0, 100),
+                  isFinal: transcription.isFinal,
+                })
+
+                setTranscriptions(prev => {
+                  const filtered = prev.filter(t => t.id !== transcription.id)
+                  const newTranscriptions = [...filtered, transcription]
+                  log('📊 Transcriptions state updated. Total:', newTranscriptions.length)
+                  return newTranscriptions
+                })
+                return
+              } catch (err) {
+                logError('❌ Failed to parse transcription data:', err)
+              }
+            }
 
             try {
               const parsed = JSON.parse(data)
@@ -367,7 +423,7 @@ export function useLiveKit(options: UseLiveKitOptions) {
                 const chatMessage: ChatMessage = {
                   id: `${Date.now()}-${participant?.identity || 'unknown'}`,
                   participantIdentity: participant?.identity || 'unknown',
-                  participantName: participant?.name || participant?.identity || 'Unknown',
+                  participantName: participant?.identity || 'Unknown',
                   message: parsed.message,
                   timestamp: Date.now(),
                   isLocal: false,
@@ -383,57 +439,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
         log('Connecting to LiveKit server...')
         await room.connect(serverUrl, token)
         log('✓ Connected to room:', room.name)
-
-        log('📝 Registering text stream handler for lk.transcription')
-        room.registerTextStreamHandler('lk.transcription', async (reader, participant) => {
-          try {
-            log('📥 Text stream received from:', participant?.identity)
-            const message = await reader.readAll()
-            const isFinal = reader.info?.attributes?.['lk.transcription_final'] === 'true'
-            const segmentId = reader.info?.attributes?.['lk.segment_id']
-            const transcribedTrackId = reader.info?.attributes?.['lk.transcribed_track_id']
-
-            log('📝 Stream attributes:', {
-              isFinal,
-              segmentId,
-              transcribedTrackId,
-              messageLength: message.length,
-              allAttributes: reader.info?.attributes,
-            })
-
-            if (transcribedTrackId) {
-              const transcription: Transcription = {
-                id: `${segmentId || Date.now()}-${participant?.identity || 'unknown'}`,
-                participantIdentity: participant?.identity || 'unknown',
-                participantName: participant?.identity || 'Unknown',
-                text: message,
-                isFinal,
-                timestamp: Date.now(),
-              }
-
-              log('✅ Transcription received:', {
-                isFinal,
-                segmentId,
-                text: message.substring(0, 100),
-                participant: participant?.identity,
-              })
-
-              setTranscriptions(prev => {
-                const newTranscriptions = isFinal
-                  ? [...prev.filter(t => t.id !== transcription.id), transcription]
-                  : [...prev.filter(t => t.id !== transcription.id), transcription]
-
-                log('📊 Transcriptions state updated. Total:', newTranscriptions.length)
-                return newTranscriptions
-              })
-            } else {
-              log('⚠️ Received text stream without transcribedTrackId - not a transcription')
-            }
-          } catch (err) {
-            logError('❌ Failed to process transcription stream:', err)
-          }
-        })
-        log('✓ Text stream handler registered successfully')
 
         roomRef.current = room
         isConnectingRef.current = false
@@ -580,7 +585,6 @@ export function useLiveKit(options: UseLiveKitOptions) {
 
       setIsTranscriptionEnabled(newState)
 
-      // Trigger STT agent to join/leave room
       const roomName = room.name
       const endpoint = newState ? `/api/stt/join/${roomName}` : `/api/stt/leave/${roomName}`
 
@@ -602,10 +606,8 @@ export function useLiveKit(options: UseLiveKitOptions) {
         log('✓ STT agent response:', result)
       } catch (apiErr) {
         logError('STT agent API error:', apiErr)
-        // Continue anyway - the data message below will still work if agent is manually started
       }
 
-      // Also publish data message to room for other participants
       const encoder = new TextEncoder()
       const data = encoder.encode(
         JSON.stringify({
