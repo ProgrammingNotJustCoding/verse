@@ -43,9 +43,6 @@ export const createRoom = async (c: Context) => {
       room = await roomRepository(db).create({
         name,
         sid: livekitRoom.sid,
-        createdBy: userId,
-        maxParticipants,
-        
       })
     } catch (dbErr) {
       try {
@@ -87,8 +84,13 @@ export const joinRoom = async (c: Context) => {
       return c.json({ error: API_ERRORS.UNAUTHORIZED }, 401)
     }
 
-    const room = await roomRepository(db).getByMeetingId(meetingId)
+    let room = await roomRepository(db).getByMeetingId(meetingId)
     if (!room) {
+      room = await roomRepository(db).getById(meetingId)
+    }
+
+    if (!room) {
+      logger.warn({ meetingId }, 'Room not found by meetingId or room.id')
       return c.json({ error: API_ERRORS.ROOM_NOT_FOUND }, 404)
     }
 
@@ -96,8 +98,6 @@ export const joinRoom = async (c: Context) => {
       return c.json({ error: API_ERRORS.ROOM_INACTIVE }, 410)
     }
 
-    
-    
     const cleanedUp = await participantRepository(db).cleanupStaleParticipants(room.id, 24)
     if (cleanedUp > 0) {
       logger.info({ roomId: room.id, cleanedUp }, 'Cleaned up stale participants')
@@ -108,14 +108,12 @@ export const joinRoom = async (c: Context) => {
       userId
     )
 
-    
     if (existingParticipant) {
       const user = await userRepository(db).getById(userId)
       if (!user) {
         return c.json({ error: API_ERRORS.USER_NOT_FOUND }, 404)
       }
 
-      
       const token = await livekit.generateToken(room.name, existingParticipant.identity, user.name)
 
       logger.info(
@@ -135,11 +133,6 @@ export const joinRoom = async (c: Context) => {
       )
     }
 
-    const participantCount = await participantRepository(db).getParticipantCount(room.id)
-    if (room.maxParticipants && participantCount >= room.maxParticipants) {
-      return c.json({ error: API_ERRORS.ROOM_FULL }, 409)
-    }
-
     const user = await userRepository(db).getById(userId)
     if (!user) {
       return c.json({ error: API_ERRORS.USER_NOT_FOUND }, 404)
@@ -152,7 +145,6 @@ export const joinRoom = async (c: Context) => {
       roomId: room.id,
       userId,
       identity,
-      isAdmin: room.createdBy === userId,
     })
 
     logger.info({ roomId: room.id, userId, identity }, 'User joined room')
@@ -191,8 +183,12 @@ export const leaveRoom = async (c: Context) => {
       return c.json({ error: API_ERRORS.UNAUTHORIZED }, 401)
     }
 
-    const room = await roomRepository(db).getByMeetingId(meetingId)
+    let room = await roomRepository(db).getByMeetingId(meetingId)
     if (!room) {
+      room = await roomRepository(db).getById(meetingId)
+    }
+    if (!room) {
+      logger.warn({ meetingId }, 'Room not found by meetingId or room.id')
       return c.json({ error: API_ERRORS.ROOM_NOT_FOUND }, 404)
     }
 
@@ -231,13 +227,13 @@ export const endRoom = async (c: Context) => {
       return c.json({ error: API_ERRORS.UNAUTHORIZED }, 401)
     }
 
-    const room = await roomRepository(db).getByMeetingId(meetingId)
+    let room = await roomRepository(db).getByMeetingId(meetingId)
     if (!room) {
-      return c.json({ error: API_ERRORS.ROOM_NOT_FOUND }, 404)
+      room = await roomRepository(db).getById(meetingId)
     }
-
-    if (room.createdBy !== userId) {
-      return c.json({ error: API_ERRORS.NOT_ROOM_ADMIN }, 403)
+    if (!room) {
+      logger.warn({ meetingId }, 'Room not found by meetingId or room.id')
+      return c.json({ error: API_ERRORS.ROOM_NOT_FOUND }, 404)
     }
 
     await livekit.deleteRoom(room.name)
@@ -268,8 +264,12 @@ export const getRoomParticipants = async (c: Context) => {
       return c.json({ error: API_ERRORS.BAD_REQUEST }, 400)
     }
 
-    const room = await roomRepository(db).getByMeetingId(meetingId)
+    let room = await roomRepository(db).getByMeetingId(meetingId)
     if (!room) {
+      room = await roomRepository(db).getById(meetingId)
+    }
+    if (!room) {
+      logger.warn({ meetingId }, 'Room not found by meetingId or room.id')
       return c.json({ error: API_ERRORS.ROOM_NOT_FOUND }, 404)
     }
 
@@ -302,13 +302,13 @@ export const removeParticipant = async (c: Context) => {
       return c.json({ error: API_ERRORS.UNAUTHORIZED }, 401)
     }
 
-    const room = await roomRepository(db).getByMeetingId(meetingId)
+    let room = await roomRepository(db).getByMeetingId(meetingId)
     if (!room) {
-      return c.json({ error: API_ERRORS.ROOM_NOT_FOUND }, 404)
+      room = await roomRepository(db).getById(meetingId)
     }
-
-    if (room.createdBy !== userId) {
-      return c.json({ error: API_ERRORS.NOT_ROOM_ADMIN }, 403)
+    if (!room) {
+      logger.warn({ meetingId }, 'Room not found by meetingId or room.id')
+      return c.json({ error: API_ERRORS.ROOM_NOT_FOUND }, 404)
     }
 
     const participant = await participantRepository(db).getById(participantId)
@@ -352,7 +352,7 @@ export const getUserRooms = async (c: Context) => {
       return c.json({ error: API_ERRORS.UNAUTHORIZED }, 401)
     }
 
-    const rooms = await roomRepository(db).getByCreator(userId)
+    const rooms = await roomRepository(db).getAllActive()
 
     return c.json({ data: { rooms } }, 200)
   } catch (error) {
@@ -368,8 +368,12 @@ export const getRoomDetails = async (c: Context) => {
   try {
     const meetingId = c.req.param('meetingId')
 
-    const room = await roomRepository(db).getByMeetingId(meetingId)
+    let room = await roomRepository(db).getByMeetingId(meetingId)
     if (!room) {
+      room = await roomRepository(db).getById(meetingId)
+    }
+    if (!room) {
+      logger.warn({ meetingId }, 'Room not found by meetingId or room.id')
       return c.json({ error: API_ERRORS.ROOM_NOT_FOUND }, 404)
     }
 

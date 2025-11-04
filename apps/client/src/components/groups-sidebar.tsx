@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Plus, Search, Users } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 
 import { useGroupsStore } from '@/store/groups'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -26,7 +26,17 @@ export function GroupsSidebar({ onGroupSelect }: { onGroupSelect: () => void }) 
   const handleAddGroup = (e: React.FormEvent) => {
     e.preventDefault()
     if (groupName) {
-      addGroup(groupName)
+      // Create a proper Group object
+      const newGroup = {
+        id: `group-${Date.now()}`,
+        name: groupName,
+        inviteCode: `invite-${Date.now()}`,
+        createdBy: 'current-user', // TODO: Get from auth context
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        deletedAt: null,
+      }
+      addGroup(newGroup)
       setGroupName('')
       setDialogOpen(false)
     }
@@ -70,13 +80,8 @@ export function GroupsSidebar({ onGroupSelect }: { onGroupSelect: () => void }) 
             </Avatar>
             <div className="flex-1 truncate">
               <p className="truncate text-sm">{group.name}</p>
-              <p className="truncate text-xs text-muted-foreground">
-                {group.lastMessage || 'No messages yet'}
-              </p>
+              <p className="truncate text-xs text-muted-foreground">No messages yet</p>
             </div>
-            {group.lastMessageTime && (
-              <time className="text-xs text-muted-foreground">{group.lastMessageTime}</time>
-            )}
           </button>
         ))}
       </div>

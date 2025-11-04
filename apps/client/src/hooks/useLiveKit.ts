@@ -71,6 +71,9 @@ export function useLiveKit(options: UseLiveKitOptions) {
   const roomRef = useRef<Room | null>(null)
   const isConnectingRef = useRef(false)
   const isDisconnectingRef = useRef(false)
+  const dataReceivedHandlerRef = useRef<
+    ((payload: Uint8Array, participant: any, kind: any, topic: string) => void) | null
+  >(null)
   const [isConnecting, setIsConnecting] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [participants, setParticipants] = useState<Map<string, ParticipantInfo>>(new Map())
@@ -132,6 +135,17 @@ export function useLiveKit(options: UseLiveKitOptions) {
       const audioPublication = participant.getTrackPublication(Track.Source.Microphone)
       const screenPublication = participant.getTrackPublication(Track.Source.ScreenShare)
 
+      // Skip bot participants that don't publish any tracks (like caption-agent)
+      const hasAnyTrack =
+        videoPublication?.track || audioPublication?.track || screenPublication?.track
+      const isBotParticipant =
+        participant.identity.includes('agent') || participant.name?.includes('agent')
+
+      if (isBotParticipant && !hasAnyTrack) {
+        log('Skipping bot participant without tracks:', participant.identity)
+        return
+      }
+
       log('Remote participant tracks:', participant.identity, {
         video: videoPublication?.track?.kind,
         audio: audioPublication?.track?.kind,
@@ -175,9 +189,15 @@ export function useLiveKit(options: UseLiveKitOptions) {
         return
       }
 
-      if (roomRef.current?.state === 'connected') {
-        log('Already connected, skipping...')
-        return
+      // Disconnect existing room before creating a new one
+      if (roomRef.current) {
+        log('Cleaning up existing room before reconnecting...')
+        if (dataReceivedHandlerRef.current) {
+          roomRef.current.off(RoomEvent.DataReceived, dataReceivedHandlerRef.current)
+          dataReceivedHandlerRef.current = null
+        }
+        await roomRef.current.disconnect()
+        roomRef.current = null
       }
 
       try {
@@ -356,102 +376,99 @@ export function useLiveKit(options: UseLiveKitOptions) {
               updateParticipants()
             }
           )
-          .on(RoomEvent.DataReceived, (payload, participant, kind, topic) => {
-            const decoder = new TextDecoder()
-            const data = decoder.decode(payload)
 
-            log('📦 Data received:', {
-              topic,
-              participant: participant?.identity,
-              kind,
-              dataLength: data.length,
-            })
+        // Set up DataReceived handler only once to prevent duplicates
+        const dataReceivedHandler = (
+          payload: Uint8Array,
+          participant: any,
+          kind: any,
+          topic: string
+        ) => {
+          const decoder = new TextDecoder()
+          const data = decoder.decode(payload)
 
-            if (topic === 'lk.transcription') {
-              try {
-                const transcriptionData = JSON.parse(data)
-                log('📝 Transcription data parsed:', transcriptionData)
+          log('📦 Data received:', {
+            topic,
+            participant: participant?.identity,
+            kind,
+            dataLength: data.length,
+          })
 
-                const speakerIdentity = transcriptionData.participant_identity
-
-                const room = roomRef.current
-                let speakerName = 'Unknown'
-
-                if (room) {
-                  if (speakerIdentity === room.localParticipant.identity) {
-                    speakerName = room.localParticipant.name || 'You'
-                  } else {
-                    const speakerParticipant = room.remoteParticipants.get(speakerIdentity)
-                    if (speakerParticipant) {
-                      speakerName = speakerParticipant.name || speakerParticipant.identity
-                    }
-                  }
-                }
-
-                const transcription: Transcription = {
-                  id: `${Date.now()}-${speakerIdentity}`,
-                  participantIdentity: speakerIdentity,
-                  participantName: speakerName,
-                  text: transcriptionData.text || data,
-                  isFinal: transcriptionData.final === true,
-                  timestamp: Date.now(),
-                }
-
-                log('✅ Transcription created:', {
-                  id: transcription.id,
-                  speaker: speakerName,
-                  text: transcription.text.substring(0, 100),
-                  isFinal: transcription.isFinal,
-                })
-
-                setTranscriptions(prev => {
-                  const filtered = prev.filter(t => t.id !== transcription.id)
-                  const newTranscriptions = [...filtered, transcription]
-                  log('📊 Transcriptions state updated. Total:', newTranscriptions.length)
-                  return newTranscriptions
-                })
-                return
-              } catch (err) {
-                logError('❌ Failed to parse transcription data:', err)
-              }
-            }
-
+          if (topic === 'lk.transcription') {
             try {
-              const parsed = JSON.parse(data)
+              const transcriptionData = JSON.parse(data)
+              log('📝 Transcription data parsed:', transcriptionData)
 
-              if (parsed.type === 'chat') {
-                const chatMessage: ChatMessage = {
-                  id: `${Date.now()}-${participant?.identity || 'unknown'}`,
-                  participantIdentity: participant?.identity || 'unknown',
-                  participantName: participant?.identity || 'Unknown',
-                  message: parsed.message,
-                  timestamp: Date.now(),
-                  isLocal: false,
-                }
-              }
+              const speakerIdentity = transcriptionData.participant_identity
+              const newText = transcriptionData.text || data
+              const currentTime = Date.now()
 
-              try {
-                const parsed = JSON.parse(data)
+              const room = roomRef.current
+              let speakerName = 'Unknown'
 
-                if (parsed.type === 'chat') {
-                  const chatMessage: ChatMessage = {
-                    id: `${Date.now()}-${participant?.identity || 'unknown'}`,
-                    participantIdentity: participant?.identity || 'unknown',
-                    participantName: participant?.identity || 'Unknown',
-                    message: parsed.message,
-                    timestamp: Date.now(),
-                    isLocal: false,
+              if (room) {
+                if (speakerIdentity === room.localParticipant.identity) {
+                  speakerName = room.localParticipant.name || 'You'
+                } else {
+                  const speakerParticipant = room.remoteParticipants.get(speakerIdentity)
+                  if (speakerParticipant) {
+                    speakerName = speakerParticipant.name || speakerParticipant.identity
                   }
-                  log('Chat message received:', chatMessage)
-                  setChatMessages(prev => [...prev, chatMessage])
                 }
-              } catch (err) {
-                logError('Failed to parse data packet:', err)
               }
+
+              // Create a new transcription entry for each update
+              const transcription: Transcription = {
+                id: `${currentTime}-${speakerIdentity}`,
+                participantIdentity: speakerIdentity,
+                participantName: speakerName,
+                text: newText,
+                isFinal: transcriptionData.final === true,
+                timestamp: currentTime,
+              }
+
+              log('✅ Transcription message:', {
+                id: transcription.id,
+                speaker: speakerName,
+                text: transcription.text.substring(0, 100),
+                isFinal: transcription.isFinal,
+              })
+
+              setTranscriptions(prev => [...prev, transcription])
+              return
             } catch (err) {
-              logError('Failed to parse data packet:', err)
+              logError('❌ Failed to parse transcription data:', err)
             }
-          }) 
+          }
+
+          try {
+            const parsed = JSON.parse(data)
+
+            if (parsed.type === 'chat') {
+              const chatMessage: ChatMessage = {
+                id: `${Date.now()}-${participant?.identity || 'unknown'}`,
+                participantIdentity: participant?.identity || 'unknown',
+                participantName: participant?.identity || 'Unknown',
+                message: parsed.message,
+                timestamp: Date.now(),
+                isLocal: false,
+              }
+              log('Chat message received:', chatMessage)
+              setChatMessages(prev => [...prev, chatMessage])
+            }
+          } catch (err) {
+            logError('Failed to parse data packet:', err)
+          }
+        }
+
+        // Remove old handler if it exists
+        if (dataReceivedHandlerRef.current) {
+          room.off(RoomEvent.DataReceived, dataReceivedHandlerRef.current)
+        }
+
+        // Register new handler and store reference
+        room.on(RoomEvent.DataReceived, dataReceivedHandler)
+        dataReceivedHandlerRef.current = dataReceivedHandler
 
         log('Connecting to LiveKit server...')
         await room.connect(serverUrl, token)
@@ -490,6 +507,13 @@ export function useLiveKit(options: UseLiveKitOptions) {
     try {
       log('Disconnecting from room...')
       isDisconnectingRef.current = true
+
+      // Remove DataReceived handler before disconnecting
+      if (dataReceivedHandlerRef.current) {
+        room.off(RoomEvent.DataReceived, dataReceivedHandlerRef.current)
+        dataReceivedHandlerRef.current = null
+      }
+
       await room.disconnect()
       log('✓ Disconnected successfully')
       roomRef.current = null
@@ -499,11 +523,11 @@ export function useLiveKit(options: UseLiveKitOptions) {
       setLocalAudioTrack(null)
       setIsCameraEnabled(false)
       setIsMicrophoneEnabled(false)
+      setIsTranscriptionEnabled(false)
     } catch (err) {
       logError('Failed to disconnect:', err)
     } finally {
       isDisconnectingRef.current = false
-      isConnectingRef.current = false
     }
   }, [])
 
@@ -602,28 +626,9 @@ export function useLiveKit(options: UseLiveKitOptions) {
 
       setIsTranscriptionEnabled(newState)
 
-      const roomName = room.name
-      const endpoint = newState ? `/api/stt/join/${roomName}` : `/api/stt/leave/${roomName}`
-
-      log(`📡 ${newState ? 'Starting' : 'Stopping'} STT agent for room: ${roomName}`)
-
-      try {
-        const response = await fetch(`http://localhost:8000${endpoint}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        })
-
-        if (!response.ok) {
-          throw new Error(`STT agent ${newState ? 'join' : 'leave'} failed`)
-        }
-
-        const result = await response.json()
-        log('✓ STT agent response:', result)
-      } catch (apiErr) {
-        logError('STT agent API error:', apiErr)
-      }
+      // Caption-agent with Deepgram handles transcription automatically
+      // No need to call external API - just publish state change to room
+      log(`📡 ${newState ? 'Enabling' : 'Disabling'} transcription display`)
 
       const encoder = new TextEncoder()
       const data = encoder.encode(
@@ -640,7 +645,9 @@ export function useLiveKit(options: UseLiveKitOptions) {
 
       log('✓ Transcription toggled successfully')
       if (newState) {
-        log('🎤 STT agent will transcribe audio and publish to lk.transcription stream')
+        log(
+          '🎤 Caption-agent is transcribing audio via Deepgram and publishing to lk.transcription stream'
+        )
       }
     } catch (err) {
       logError('Failed to toggle transcription:', err)
@@ -726,6 +733,8 @@ export function useLiveKit(options: UseLiveKitOptions) {
         log('Force disconnecting room on unmount')
         roomRef.current.disconnect()
       }
+      // Clear the data received handler ref on unmount
+      dataReceivedHandlerRef.current = null
     }
   }, [])
 

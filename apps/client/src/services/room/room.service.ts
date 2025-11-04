@@ -78,10 +78,12 @@ export const roomService = {
     const url = `${API.BASE_URL}${API.ROOMS.BASE_URL()}${API.ROOMS.JOIN()}`
     log('POST', url)
 
+    const requestBody = JSON.stringify(data)
+
     const res = await fetch(url, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify(data),
+      body: requestBody,
     })
 
     if (!res.ok) {
@@ -91,7 +93,6 @@ export const roomService = {
     }
 
     const result = await res.json()
-    log('joinRoom success, token received')
     return result as { data: JoinRoomResponse }
   },
 

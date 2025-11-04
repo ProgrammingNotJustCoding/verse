@@ -1,6 +1,8 @@
 import json
 import logging
+
 from livekit import rtc
+
 from .kafka_producer import KafkaProducer
 
 logger = logging.getLogger(__name__)
@@ -18,11 +20,14 @@ async def publish_transcript(
     """Publish to LiveKit data channel + Kafka"""
     data = {
         "room": room.name,
+        "meeting_id": room.name,  # For database storage
         "participant_identity": participant.identity,
         "track_sid": track_sid,
         "text": text,
         "final": True,
         "timestamp": timestamp,
+        "start_ms": None,  # TODO: Calculate from timestamp
+        "end_ms": None,  # TODO: Calculate from timestamp
     }
 
     try:

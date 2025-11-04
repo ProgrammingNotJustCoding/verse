@@ -1,12 +1,11 @@
-import sys
 import asyncio
 import logging
+
 from livekit import rtc
-from livekit.agents import JobContext, WorkerOptions, cli, AutoSubscribe
+from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli
 
-from .transcriber import transcribe_track
 from .kafka_producer import KafkaProducer
-
+from .transcriber import transcribe_track
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("caption-agent")
@@ -14,8 +13,7 @@ logger = logging.getLogger("caption-agent")
 
 async def entrypoint(job: JobContext):
     logger.info(f"Connecting to room: {job.room.name}")
-    
-    # Initialize Kafka producer (singleton pattern)
+
     kafka_producer = KafkaProducer()
 
     @job.room.on("track_subscribed")

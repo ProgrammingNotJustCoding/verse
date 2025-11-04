@@ -6,16 +6,17 @@ rtc:
   tcp_port: 7881
   port_range_start: 50100
   port_range_end: 50199
-  # For local development: disable external IP discovery and force localhost
+  # For Podman: Disable external IP to prevent using public IP
   use_external_ip: false
-  # Force the node to advertise localhost as its IP
-  node_ip: 127.0.0.1
-  # TURN server configuration for Docker NAT traversal
+  # Use local network IP for WebRTC media connectivity
+  # Replace with your machine's IP: run `ifconfig | grep "inet " | grep -v 127.0.0.1`
+  node_ip: 10.9.225.111
+  # TURN server configuration for NAT traversal
   turn_servers:
-    - host: coturn
+    - host: 10.9.225.111
       port: 3478
-      protocol: udp # Use 'tls' if forcing TLS on 5349; 'udp' for standard TURN
-      username: "verse" # Username for TURN auth
+      protocol: udp
+      username: "verse"
       credential: verse-turn-secret
 
 redis:

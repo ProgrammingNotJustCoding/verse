@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { VideoRoom } from '@/components/room'
 import { roomService } from '@/services/room/room.service'
+import { useRoomsStore } from '@/store/rooms'
 import { Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -14,8 +15,16 @@ const error = (...args: unknown[]) => {
 }
 
 export default function CallPage() {
-  const { meetingId } = useParams<{ meetingId: string }>()
+  const params = useParams<{ meetingId: string }>()
+  const meetingId = params.meetingId
   const navigate = useNavigate()
+  const { activeRoom, clearActiveRoom } = useRoomsStore()
+
+  log('Component mounted/updated')
+  log('URL params:', params)
+  log('meetingId from params:', meetingId)
+  log('meetingId type:', typeof meetingId)
+  log('meetingId is null/undefined:', meetingId === null || meetingId === undefined)
 
   const [isLoading, setIsLoading] = useState(true)
   const [roomData, setRoomData] = useState<{
@@ -29,10 +38,8 @@ export default function CallPage() {
   const LIVEKIT_SERVER_URL = import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880'
 
   useEffect(() => {
-    log('CallPage mounted with meetingId:', meetingId)
     if (!meetingId) {
-      error('No meetingId provided')
-      setErrorMessage('Invalid meeting ID')
+      setErrorMessage('Invalid meeting ID - no meetingId in URL')
       setIsLoading(false)
       return
     }
@@ -48,7 +55,6 @@ export default function CallPage() {
     setErrorMessage(null)
 
     try {
-      log('Step 1: Joining room...')
       const joinResponse = await roomService.joinRoom({ meetingId })
       const { token, room, participant } = joinResponse.data
 
@@ -80,6 +86,7 @@ export default function CallPage() {
 
   const handleLeave = async () => {
     if (!meetingId) {
+      clearActiveRoom()
       navigate('/dash/calls')
       return
     }
@@ -95,11 +102,13 @@ export default function CallPage() {
       error('Failed to leave room:', err)
     }
 
+    clearActiveRoom()
     navigate('/dash/calls')
   }
 
   const handleEndRoom = async () => {
     if (!meetingId) {
+      clearActiveRoom()
       navigate('/dash/calls')
       return
     }
@@ -118,6 +127,7 @@ export default function CallPage() {
       })
     }
 
+    clearActiveRoom()
     navigate('/dash/calls')
   }
 

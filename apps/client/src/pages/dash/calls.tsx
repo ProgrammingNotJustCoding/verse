@@ -13,6 +13,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { useDmsStore } from '@/store/dms'
 import { useGroupsStore } from '@/store/groups'
+import { useRoomsStore } from '@/store/rooms'
 import { Plus, Search, Video, Tag as TagIcon, X, Edit2, Trash2, PhoneCall } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import { roomService } from '@/services/room/room.service'
@@ -177,6 +178,7 @@ export default function CallsPage() {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [editingCall, setEditingCall] = React.useState<Call | null>(null)
   const { groups } = useGroupsStore()
+  const { addRoom } = useRoomsStore()
   const navigate = useNavigate()
 
   const [isCreatingRoom, setIsCreatingRoom] = React.useState(false)
@@ -333,7 +335,23 @@ export default function CallsPage() {
       })
 
       const room = createResponse.data.room
-      log('Step 1 ✓: Room created:', room.id)
+      log('Step 1 ✓: Room created:', {
+        id: room.id,
+        meetingId: room.meetingId,
+        name: room.name,
+        fullResponse: room,
+      })
+
+      // Use room.id as the meeting identifier (backend returns meetingId as null initially)
+      const meetingId = room.meetingId || room.id
+      if (!meetingId) {
+        error('❌ Room created but no identifier found!', room)
+        throw new Error('Room created but no identifier (id or meetingId) found in response')
+      }
+
+      // Store room in Zustand before navigating
+      addRoom(room)
+      log('✓ Room stored in Zustand store')
 
       setIsDialogOpen(false)
       resetForm()
@@ -342,8 +360,8 @@ export default function CallsPage() {
         style: { background: '#171717', color: '#00ff00' },
       })
 
-      log('Navigating to call page:', `/call/${room.meetingId}`)
-      navigate(`/call/${room.meetingId}`)
+      log('✓ Navigating to call page with meetingId:', meetingId)
+      navigate(`/call/${meetingId}`)
     } catch (err) {
       error('Failed to create and join room:', err)
       toast.error(err instanceof Error ? err.message : 'Failed to create room', {
