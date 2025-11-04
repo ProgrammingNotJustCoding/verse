@@ -3,16 +3,30 @@ import { Hono } from 'hono'
 import { validateEnv, type Environment } from './config/env.ts'
 import { createDb } from './database/db.ts'
 import { createLogger } from './config/logger.ts'
-import { authRouter, participantRouter, roomRouter } from './api/routes.ts'
+import {
+  authRouter,
+  participantRouter,
+  roomRouter,
+  groupRouter,
+  meetingRouter,
+  chatRouter,
+} from './api/routes.ts'
 import { cors } from 'hono/cors'
 import { createLivekitService, type LivekitService } from './services/livekit.service.ts'
 import { CleanupService, createCleanupService } from './services/cleanup.service.ts'
+import { createRedisProvider, type RedisProviderType } from './providers/redis.provider.ts'
+import { createChatService } from './services/chat.service.ts'
+import { createWebSocketService } from './services/websocket.service.ts'
+import { createServer } from 'http'
+
 type Bindings = Environment
 
 type Variables = {
   logger: ReturnType<typeof createLogger>
   db: ReturnType<typeof createDb>
   livekit: LivekitService
+  redis: RedisProviderType
+  chat: ReturnType<typeof createChatService>
 }
 
 const app = new Hono<{
@@ -23,14 +37,23 @@ const app = new Hono<{
 let globalLogger: ReturnType<typeof createLogger> | null = null
 let globalDb: ReturnType<typeof createDb> | null = null
 let globalLivekit: LivekitService | null = null
+let globalRedis: RedisProviderType | null = null
+let globalChat: ReturnType<typeof createChatService> | null = null
 let globalCleanup: CleanupService | null = null
 let globalEnv: Environment | null = null
+let globalWs: ReturnType<typeof createWebSocketService> | null = null
 
 if (typeof process !== 'undefined' && process.env.NODE_ENV) {
   globalEnv = validateEnv(process.env)
   globalLogger = createLogger(globalEnv)
   globalDb = createDb(globalEnv)
   globalLivekit = createLivekitService(globalEnv)
+
+  globalRedis = createRedisProvider(globalEnv)
+  await globalRedis.connect()
+
+  globalChat = createChatService(globalDb, globalRedis)
+  await globalChat.start()
 
   globalCleanup = createCleanupService({
     db: globalDb,
@@ -50,10 +73,14 @@ app.use('*', async (c, next) => {
   const logger = globalLogger || createLogger(env)
   const db = globalDb || createDb(env)
   const livekit = globalLivekit || createLivekitService(env)
+  const redis = globalRedis!
+  const chat = globalChat!
 
   c.set('logger', logger)
   c.set('db', db)
   c.set('livekit', livekit)
+  c.set('redis', redis)
+  c.set('chat', chat)
 
   logger.info({ method: c.req.method, url: c.req.url }, 'Request received')
 
@@ -71,6 +98,9 @@ app.get('/health', c => {
 })
 
 app.route('/auth', authRouter)
+app.route('/groups', groupRouter)
+app.route('/meetings', meetingRouter)
+app.route('/chat', chatRouter)
 app.route('/rooms', roomRouter)
 app.route('/participants', participantRouter)
 
@@ -81,7 +111,7 @@ app.notFound(c => {
 })
 
 if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
-  serve(
+  const server = serve(
     {
       fetch: app.fetch,
       port: 8000,
@@ -90,4 +120,17 @@ if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
       console.log(`🚀 Server is running on http://localhost:${info.port}`)
     }
   )
+
+  if (globalDb && globalChat && globalEnv) {
+    const httpServer = server as any as import('http').Server
+    globalWs = createWebSocketService(httpServer, globalDb, globalChat, globalEnv.JWT_SECRET)
+  }
+
+  process.on('SIGINT', async () => {
+    console.log('\n🛑 Shutting down gracefully...')
+    if (globalChat) await globalChat.stop()
+    if (globalWs) await globalWs.stop()
+    if (globalRedis) await globalRedis.disconnect()
+    process.exit(0)
+  })
 }

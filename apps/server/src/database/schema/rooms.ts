@@ -1,16 +1,11 @@
-import { integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
-import { users } from './users.ts'
+import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { meetings } from './meetings.ts'
 
 export const rooms = pgTable('rooms', {
   id: uuid('id').primaryKey().defaultRandom(),
-  meetingId: text('meeting_id').unique(), 
-  name: text('name').notNull(),
   sid: text('sid').notNull().unique(),
-  createdBy: uuid('created_by')
-    .notNull()
-    .references(() => users.id),
-  maxParticipants: integer('max_participants').default(20),
+  name: text('name').notNull(),
+  meetingId: uuid('meeting_id').references(() => meetings.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
   deletedAt: timestamp('deleted_at'),
 })
