@@ -1,0 +1,120 @@
+services:
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: verse-kafka
+    restart: unless-stopped
+    user: root
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+      KAFKA_LISTENERS: "PLAINTEXT://kafka:29092,CONTROLLER://kafka:9093,PLAINTEXT_HOST://0.0.0.0:9092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+
+      KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+      KAFKA_MESSAGE_MAX_BYTES: 2000000
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 2000000
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - verse-network
+    command:
+      - bash
+      - -c
+      - |
+        # Ensure data directory exists and has correct permissions
+        mkdir -p /var/lib/kafka/data
+        chown -R appuser:appuser /var/lib/kafka/data
+
+        # Format storage if not already formatted
+        if [ ! -f /var/lib/kafka/data/meta.properties ]; then
+          echo "Formatting Kafka storage directory..."
+          su appuser -c "kafka-storage format \
+            --config /etc/kafka/server.properties \
+            --cluster-id MkU3OEVBNTcwNTJENDM2Qk \
+            --ignore-formatted"
+        else
+          echo "Kafka storage already formatted"
+        fi
+
+        # Start Kafka as appuser
+        echo "Starting Kafka broker..."
+        su appuser -c "/etc/confluent/docker/run"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect:7.6.0
+    container_name: verse-kafka-connect
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_started
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: "kafka:29092"
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: "verse-connect-cluster"
+      CONNECT_CONFIG_STORAGE_TOPIC: "connect-configs"
+      CONNECT_OFFSET_STORAGE_TOPIC: "connect-offsets"
+      CONNECT_STATUS_STORAGE_TOPIC: "connect-status"
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
+      CONNECT_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_REST_ADVERTISED_HOST_NAME: "kafka-connect"
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
+    volumes:
+      - ./connectors:/etc/kafka-connect/connectors:ro
+      - connect-data:/tmp/connect-data
+    networks:
+      - verse-network
+    command:
+      - bash
+      - -c
+      - |
+        echo "Installing JDBC Sink Connector..."
+        confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:10.7.4
+
+        echo "Downloading PostgreSQL JDBC driver..."
+        mkdir -p /usr/share/confluent-hub-components/confluentinc-kafka-connect-jdbc/lib
+        cd /usr/share/confluent-hub-components/confluentinc-kafka-connect-jdbc/lib
+        curl -sL -o postgresql-42.7.1.jar https://jdbc.postgresql.org/download/postgresql-42.7.1.jar
+
+        echo "Starting Kafka Connect..."
+        /etc/confluent/docker/run
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8083/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  kafka-data:
+    driver: local
+  connect-data:
+    driver: local

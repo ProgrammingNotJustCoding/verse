@@ -13,16 +13,20 @@ async def publish_transcript(
     participant: rtc.RemoteParticipant,
     track_sid: str,
     text: str,
-    timestamp: float,
+    start_ms: int,
+    end_ms: int,
 ):
     """Publish to LiveKit data channel + Kafka"""
+
+    meeting_id = room.metadata or room.name.replace("meeting-", "")
+
     data = {
-        "room": room.name,
+        "meeting_id": meeting_id,
         "participant_identity": participant.identity,
-        "track_sid": track_sid,
         "text": text,
+        "start_ms": start_ms,
+        "end_ms": end_ms,
         "final": True,
-        "timestamp": timestamp,
     }
 
     try:
@@ -31,16 +35,16 @@ async def publish_transcript(
             topic="lk.transcription",
             reliable=True,
         )
-        logger.info(f"Published to LiveKit data channel")
+        logger.info(f"✓ Published to LiveKit data channel")
     except Exception as e:
-        logger.error(f"LiveKit publish error: {e}")
+        logger.error(f"✗ LiveKit publish error: {e}")
 
     try:
         KafkaProducer().produce(
             topic=KAFKA_TOPIC,
-            key=room.name,
+            key=meeting_id,
             value=data,
         )
-        logger.info(f"Produced to Kafka topic {KAFKA_TOPIC}")
+        logger.info(f"✓ Produced to Kafka: {text[:50]}...")
     except Exception as e:
-        logger.error(f"Kafka produce error: {e}")
+        logger.error(f"✗ Kafka produce error: {e}")
