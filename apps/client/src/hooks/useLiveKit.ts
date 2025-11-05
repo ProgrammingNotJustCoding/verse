@@ -428,13 +428,28 @@ export function useLiveKit(options: UseLiveKitOptions) {
                   timestamp: Date.now(),
                   isLocal: false,
                 }
-                log('Chat message received:', chatMessage)
-                setChatMessages(prev => [...prev, chatMessage])
               }
-            } catch (err) {
-              logError('Failed to parse data packet:', err)
+
+              try {
+                const parsed = JSON.parse(data)
+
+                if (parsed.type === 'chat') {
+                  const chatMessage: ChatMessage = {
+                    id: `${Date.now()}-${participant?.identity || 'unknown'}`,
+                    participantIdentity: participant?.identity || 'unknown',
+                    participantName: participant?.identity || 'Unknown',
+                    message: parsed.message,
+                    timestamp: Date.now(),
+                    isLocal: false,
+                  }
+                  log('Chat message received:', chatMessage)
+                  setChatMessages(prev => [...prev, chatMessage])
+                }
+              } catch (err) {
+                logError('Failed to parse data packet:', err)
+              }
             }
-          })
+          )
 
         log('Connecting to LiveKit server...')
         await room.connect(serverUrl, token)

@@ -1,7 +1,6 @@
 import { API } from '@/utils/api'
 import { getAuthToken } from '../auth.service'
 
-
 const DEBUG = true
 const log = (...args: unknown[]) => {
   if (DEBUG) console.log('[RoomService]', ...args)
@@ -109,7 +108,7 @@ export const roomService = {
     if (!res.ok) {
       const err = await res.json()
       error('leaveRoom failed:', res.status, err)
-      
+
       if (res.status === 404) {
         log('Participant already left (404), treating as success')
         return { data: { message: 'Already left' } }

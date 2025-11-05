@@ -2,7 +2,6 @@ import { createInsertSchema } from 'drizzle-zod'
 import { rooms } from '../schema/rooms.ts'
 import { eq, and, isNull } from 'drizzle-orm'
 import type { Database } from '../db.ts'
-import { generateMeetingCode } from '../../utils/meeting.ts'
 
 export const insertRoomSchema = createInsertSchema(rooms)
 
@@ -40,13 +39,6 @@ class RoomRepository {
     return result[0]
   }
 
-  async getByCreator(creatorId: string): Promise<Room[]> {
-    return await this.db
-      .select()
-      .from(rooms)
-      .where(and(eq(rooms.createdBy, creatorId), isNull(rooms.deletedAt)))
-  }
-
   async getByMeetingId(meetingId: string): Promise<Room | undefined> {
     const result = await this.db
       .select()
@@ -61,33 +53,24 @@ class RoomRepository {
   }
 
   async create(roomData: NewRoom): Promise<Room> {
-    let meetingId = roomData.meetingId
-
-    
-    if (!meetingId) {
-      let attempts = 0
-      const maxAttempts = 10
-
-      do {
-        meetingId = generateMeetingCode()
-        attempts++
-
-        if (attempts >= maxAttempts) {
-          throw new Error('Failed to generate unique meeting ID')
-        }
-      } while (await this.meetingIdExists(meetingId))
-    }
-
-    const validatedData = insertRoomSchema.parse({ ...roomData, meetingId })
-    const result = await this.db.insert(rooms).values(validatedData).returning()
+    const result = await this.db.insert(rooms).values(roomData).returning()
     return result[0]
   }
 
   async update(id: string, roomData: Partial<NewRoom>): Promise<Room | undefined> {
     const result = await this.db
       .update(rooms)
-      .set({ ...roomData, updatedAt: new Date() })
+      .set(roomData)
       .where(and(eq(rooms.id, id), isNull(rooms.deletedAt)))
+      .returning()
+    return result[0]
+  }
+
+  async updateBySid(sid: string, roomData: Partial<NewRoom>): Promise<Room | undefined> {
+    const result = await this.db
+      .update(rooms)
+      .set(roomData)
+      .where(and(eq(rooms.sid, sid), isNull(rooms.deletedAt)))
       .returning()
     return result[0]
   }
@@ -95,7 +78,7 @@ class RoomRepository {
   async softDelete(id: string): Promise<Room | undefined> {
     const result = await this.db
       .update(rooms)
-      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .set({ deletedAt: new Date() })
       .where(and(eq(rooms.id, id), isNull(rooms.deletedAt)))
       .returning()
     return result[0]
@@ -103,14 +86,6 @@ class RoomRepository {
 
   async delete(id: string): Promise<boolean> {
     const result = await this.db.delete(rooms).where(eq(rooms.id, id)).returning()
-    return result.length > 0
-  }
-
-  async isCreator(roomId: string, userId: string): Promise<boolean> {
-    const result = await this.db
-      .select()
-      .from(rooms)
-      .where(and(eq(rooms.id, roomId), eq(rooms.createdBy, userId), isNull(rooms.deletedAt)))
     return result.length > 0
   }
 }
