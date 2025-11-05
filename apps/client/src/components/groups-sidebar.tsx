@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Plus, Search, Users } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 
 import { useGroupsStore } from '@/store/groups'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'

@@ -4,8 +4,8 @@ log_level: debug
 
 rtc:
   tcp_port: 7881
-  port_range_start: 50100
-  port_range_end: 50199
+  port_range_start: 50200
+  port_range_end: 50299
   # For local development: disable external IP discovery and force localhost
   use_external_ip: false
   # Force the node to advertise localhost as its IP

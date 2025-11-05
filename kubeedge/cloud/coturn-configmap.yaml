@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coturn-config
+  namespace: verse
+data:
+  turnserver.conf: |
+    # Coturn TURN server configuration for Verse
+
+    # Listening port for TURN/STUN
+    listening-port=3478
+
+    # TLS listening port
+    tls-listening-port=5349
+
+    # Listening IP (bind to all interfaces in the pod)
+    listening-ip=0.0.0.0
+
+    # Relay IP (use pod IP for relaying)
+    relay-ip=0.0.0.0
+
+    # External IP (will be set via environment variable or detected)
+    # external-ip=<PUBLIC_IP>
+
+    # Realm for TURN authentication
+    realm=verse.live
+
+    # Enable verbose logging
+    verbose
+
+    # Log to stdout for Kubernetes
+    log-file=stdout
+    simple-log
+
+    # Use authentication secret for TURN REST API (LiveKit compatible)
+    use-auth-secret
+    static-auth-secret=verse-turn-secret
+
+    # Port range for relay endpoints (must match container ports)
+    min-port=50000
+    max-port=50099
+
+    # For production with TLS, uncomment and mount certs:
+    # cert=/etc/coturn/certs/tls.crt
+    # pkey=/etc/coturn/certs/tls.key
+
+    # For development without TLS:
+    no-tls
+    no-dtls
+
+    # Security settings
+    no-multicast-peers
+    no-cli
+    no-software-attribute
+
+    # Quota and limits
+    total-quota=100
+    bps-capacity=0
+    stale-nonce=600
+
+    # Mobility support
+    mobility
+
+    # Fingerprint in STUN messages
+    fingerprint
+
+    # Server name
+    server-name=verse-coturn
+
+    # Deny private IP ranges from being relayed (security)
+    denied-peer-ip=0.0.0.0-0.255.255.255
+    denied-peer-ip=10.0.0.0-10.255.255.255
+    denied-peer-ip=100.64.0.0-100.127.255.255
+    denied-peer-ip=127.0.0.0-127.255.255.255
+    denied-peer-ip=169.254.0.0-169.254.255.255
+    denied-peer-ip=172.16.0.0-172.31.255.255
+    denied-peer-ip=192.0.0.0-192.0.0.255
+    denied-peer-ip=192.0.2.0-192.0.2.255
+    denied-peer-ip=192.88.99.0-192.88.99.255
+    denied-peer-ip=192.168.0.0-192.168.255.255
+    denied-peer-ip=198.18.0.0-198.19.255.255
+    denied-peer-ip=198.51.100.0-198.51.100.255
+    denied-peer-ip=203.0.113.0-203.0.113.255
+    denied-peer-ip=240.0.0.0-255.255.255.255
+
+    # Allow loopback for local testing (remove in production)
+    # allow-loopback-peers

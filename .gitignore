@@ -1,6 +1,9 @@
 # deps
 node_modules/
 __pycache__
+venv/
+*.tar
+*.tar.*
 
 # env
 .env

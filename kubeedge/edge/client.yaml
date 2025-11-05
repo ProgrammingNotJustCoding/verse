@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: verse-client
+  namespace: verse
+  labels:
+    app: verse-client
+    component: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: verse-client
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: verse-client
+        component: frontend
+    spec:
+      containers:
+      - name: client
+        image: localhost/verse/client:latest
+        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: nginx.conf
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: client-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: verse-client
+  namespace: verse
+  labels:
+    app: verse-client
+    component: frontend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http
+  selector:
+    app: verse-client
+    component: frontend
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: verse-client-nodeport
+  namespace: verse
+  labels:
+    app: verse-client
+    component: frontend
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http
+    nodePort: 30080
+  selector:
+    app: verse-client
+    component: frontend

@@ -1,0 +1,156 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: verse-server
+  namespace: verse
+  labels:
+    app: verse-server
+    component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: verse-server
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: verse-server
+        component: backend
+    spec:
+      containers:
+      - name: server
+        image: localhost/verse/server:latest
+        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3000
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3000"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: verse-secrets
+              key: DATABASE_URL
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: verse-secrets
+              key: JWT_SECRET
+        - name: LIVEKIT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: verse-secrets
+              key: LIVEKIT_API_KEY
+        - name: LIVEKIT_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: verse-secrets
+              key: LIVEKIT_API_SECRET
+        - name: LIVEKIT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: verse-secrets
+              key: LIVEKIT_SECRET_KEY
+        - name: LIVEKIT_HOST
+          valueFrom:
+            secretKeyRef:
+              name: verse-secrets
+              key: LIVEKIT_HOST
+        - name: LIVEKIT_URL
+          valueFrom:
+            secretKeyRef:
+              name: verse-secrets
+              key: LIVEKIT_URL
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: verse-secrets
+              key: REDIS_URL
+        - name: MINIO_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: verse-secrets
+              key: MINIO_ENDPOINT
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: verse-secrets
+              key: MINIO_ACCESS_KEY
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: verse-secrets
+              key: MINIO_SECRET_KEY
+        - name: MINIO_BUCKET
+          valueFrom:
+            secretKeyRef:
+              name: verse-secrets
+              key: MINIO_BUCKET
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: verse-server
+  namespace: verse
+  labels:
+    app: verse-server
+    component: backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: verse-server
+    component: backend
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: verse-server-nodeport
+  namespace: verse
+  labels:
+    app: verse-server
+    component: backend
+spec:
+  type: NodePort
+  ports:
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+    name: http
+    nodePort: 30300
+  selector:
+    app: verse-server
+    component: backend

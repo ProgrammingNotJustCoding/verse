@@ -110,14 +110,19 @@ app.notFound(c => {
   return c.json({ status: 404, message: 'Not Found' }, 404)
 })
 
-if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
+if (typeof process !== 'undefined' && process.env.NODE_ENV) {
+  const port = process.env.NODE_ENV === 'development' ? 8000 : 3000
+  const hostname = process.env.NODE_ENV === 'development' ? 'localhost' : '0.0.0.0'
+
   const server = serve(
     {
       fetch: app.fetch,
-      port: 8000,
+      port: port,
+      hostname: hostname,
     },
     info => {
-      console.log(`🚀 Server is running on http://localhost:${info.port}`)
+      console.log(`🚀 Server is running on http://${hostname}:${info.port}`)
+      globalLogger?.info(`HTTP server listening on ${hostname}:${info.port}`)
     }
   )
 

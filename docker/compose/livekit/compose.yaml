@@ -7,9 +7,9 @@ services:
     ports:
       - "7880:7880"
       - "7881:7881"
-      - "50100-50199:50100-50199/udp"
+      - "50200-50299:50200-50299/udp"
     volumes:
-      - ./livekit.yaml:/etc/livekit.yaml:ro,Z
+      - /Users/harshnpatel/Documents/github/verse/docker/compose/livekit/livekit.yaml:/etc/livekit.yaml:ro
     depends_on:
       - redis
       - coturn
