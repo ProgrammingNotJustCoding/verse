@@ -141,18 +141,15 @@ export class ChatService {
     if (!messages || messages.length === 0) return
 
     try {
-      // Batch insert to DB using the message repository
       for (const msg of messages) {
         await this.messageRepo.create(msg)
       }
 
-      // Clear buffer
       this.messageBuffer.delete(groupId)
 
       console.log(`✓ Flushed ${messages.length} messages for group ${groupId}`)
     } catch (error) {
       console.error('Failed to flush messages:', error)
-      // Keep messages in buffer for retry
     }
   }
 

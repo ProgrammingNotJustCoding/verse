@@ -19,16 +19,19 @@ export class MeetingService {
   }
 
   async startMeeting(groupId: string, userId: string, name?: string) {
+    // Check if user is in group
     const isInGroup = await this.groupRepo.isUserInGroup(groupId, userId)
     if (!isInGroup) {
       throw new Error('User not in group')
     }
 
+    // Check if there's already an active meeting
     const activeMeeting = await this.meetingRepo.getActiveMeeting(groupId)
     if (activeMeeting) {
       throw new Error('There is already an active meeting in this group')
     }
 
+    // Create meeting record
     const meeting = await this.meetingRepo.create({
       groupId,
       startedBy: userId,
@@ -36,9 +39,11 @@ export class MeetingService {
       name: name || `Group Meeting`,
     })
 
+    // Create LiveKit room
     const roomName = `meeting-${meeting.id}`
     const lkRoom = await this.livekit.createRoom(roomName, 50)
 
+    // Save room record
     await this.roomRepo.create({
       sid: lkRoom.sid,
       name: lkRoom.name,

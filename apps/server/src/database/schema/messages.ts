@@ -11,7 +11,7 @@ export const messages = pgTable('messages', {
   userId: uuid('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
-  meetingId: uuid('meeting_id').references(() => meetings.id), // if it's a meeting notification
+  meetingId: uuid('meeting_id').references(() => meetings.id),
   content: text('content').notNull(),
   type: text('type').$type<'message' | 'meeting_started' | 'meeting_ended'>().default('message'),
   createdAt: timestamp('created_at').notNull().defaultNow(),

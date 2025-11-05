@@ -2,11 +2,12 @@ import { RoomServiceClient, AccessToken } from 'livekit-server-sdk'
 import type { Environment } from '../config/env.ts'
 
 export const createLivekitService = (env: Environment) => {
-  const roomService = new RoomServiceClient(
-    env.LIVEKIT_HOST,
-    env.LIVEKIT_API_KEY,
-    env.LIVEKIT_SECRET_KEY
-  )
+  // Ensure URL has protocol
+  const livekitUrl = env.LIVEKIT_HOST.startsWith('http')
+    ? env.LIVEKIT_HOST
+    : `http://${env.LIVEKIT_HOST}`
+
+  const roomService = new RoomServiceClient(livekitUrl, env.LIVEKIT_API_KEY, env.LIVEKIT_SECRET_KEY)
 
   const createRoom = async (roomName: string, maxParticipants: number = 20) => {
     const opts = {

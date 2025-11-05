@@ -16,8 +16,7 @@ import { createLivekitService, type LivekitService } from './services/livekit.se
 import { CleanupService, createCleanupService } from './services/cleanup.service.ts'
 import { createRedisProvider, type RedisProviderType } from './providers/redis.provider.ts'
 import { createChatService } from './services/chat.service.ts'
-import { createWebSocketService } from './services/websocket.service.ts'
-import { createServer } from 'http'
+import { createWebSocketService } from './services/ws.service.ts'
 
 type Bindings = Environment
 
@@ -27,6 +26,7 @@ type Variables = {
   livekit: LivekitService
   redis: RedisProviderType
   chat: ReturnType<typeof createChatService>
+  userId: string
 }
 
 const app = new Hono<{

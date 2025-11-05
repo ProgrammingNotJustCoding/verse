@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws'
 import type { Database } from '../database/db.ts'
 import type { ChatService } from './chat.service.ts'
 import { groupRepository } from '../database/repositories/groups.repository.ts'
+import jwt from 'jsonwebtoken'
 
 interface WebSocketMessage {
   type: 'subscribe' | 'unsubscribe' | 'message' | 'ping'
@@ -124,9 +125,12 @@ export class WebSocketService {
     }
 
     try {
-      const jwt = await import('jsonwebtoken')
-      const decoded = jwt.verify(message.token, this.jwtSecret) as { id: string }
-      const userId = decoded.id
+      const decoded = jwt.verify(message.token, this.jwtSecret) as { userId: string }
+      const userId = decoded.userId
+
+      if (!userId) {
+        throw new Error('Invalid token payload')
+      }
 
       const isInGroup = await this.groupRepo.isUserInGroup(message.groupId, userId)
       if (!isInGroup) {
@@ -160,10 +164,11 @@ export class WebSocketService {
 
       console.log(`User ${userId} subscribed to group ${message.groupId}`)
     } catch (error: any) {
+      console.error('WebSocket auth error:', error)
       ws.send(
         JSON.stringify({
           type: 'error',
-          message: 'Authentication failed',
+          message: 'Authentication failed: ' + error.message,
         })
       )
     }
@@ -191,19 +196,32 @@ export class WebSocketService {
   }
 
   private async handleChatMessage(ws: AuthenticatedWebSocket, message: WebSocketMessage) {
-    if (!ws.userId || !ws.groupId || !message.content) {
+    if (!ws.userId || !message.content) {
       ws.send(
         JSON.stringify({
           type: 'error',
-          message: 'Missing userId, groupId, or content',
+          message: 'Missing userId or content',
+        })
+      )
+      return
+    }
+
+    const groupId = message.groupId || ws.groupId
+
+    if (!groupId) {
+      ws.send(
+        JSON.stringify({
+          type: 'error',
+          message: 'Missing groupId',
         })
       )
       return
     }
 
     try {
-      await this.chatService.sendMessage(ws.groupId, ws.userId, message.content)
+      await this.chatService.sendMessage(groupId, ws.userId, message.content)
     } catch (error: any) {
+      console.error('Chat message error:', error)
       ws.send(
         JSON.stringify({
           type: 'error',

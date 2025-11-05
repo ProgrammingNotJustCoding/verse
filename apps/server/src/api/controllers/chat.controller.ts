@@ -120,9 +120,9 @@ export const getMeetingSummary = async (c: Context) => {
     const userId = c.get('userId')
     const meetingId = c.req.param('meetingId')
 
-    const { captionRepository } = await import('../../database/repositories/caption.repository.ts')
-    const { meetingRepository } = await import('../../database/repositories/meeting.repository.ts')
-    const { groupRepository } = await import('../../database/repositories/group.repository.ts')
+    const { captionRepository } = await import('../../database/repositories/captions.repository.ts')
+    const { meetingRepository } = await import('../../database/repositories/meetings.repository.ts')
+    const { groupRepository } = await import('../../database/repositories/groups.repository.ts')
 
     const captionRepo = captionRepository(db)
     const meetingRepo = meetingRepository(db)

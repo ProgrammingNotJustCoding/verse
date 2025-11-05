@@ -21,7 +21,7 @@ const removeMemberSchema = z.object({
 export const createGroup = async (c: Context) => {
   try {
     const db = c.get('db')
-    const userId = c.get('userId') // from auth middleware
+    const userId = c.get('userId')
     const body = await c.req.json()
 
     const { name } = createGroupSchema.parse(body)

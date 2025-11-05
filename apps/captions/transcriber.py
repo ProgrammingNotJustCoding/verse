@@ -20,7 +20,6 @@ async def transcribe_track(
     audio_stream = rtc.AudioStream(track)
     stt_stream = stt_provider.stream()
 
-    # Track start time for relative timestamps
     start_time = asyncio.get_event_loop().time()
 
     async def _forward(ev: stt.SpeechEvent):
@@ -31,7 +30,6 @@ async def transcribe_track(
         elif ev.type == stt.SpeechEventType.FINAL_TRANSCRIPT:
             print(f"\n[{participant.identity}]: {alt.text}\n")
 
-            # Calculate millisecond timestamps from start of track
             current_time = asyncio.get_event_loop().time()
             relative_ms = int((current_time - start_time) * 1000)
 
@@ -41,7 +39,7 @@ async def transcribe_track(
                 track_sid=track.sid,
                 text=alt.text,
                 start_ms=relative_ms,
-                end_ms=relative_ms + len(alt.text.split()) * 200,  # rough estimate
+                end_ms=relative_ms + len(alt.text.split()) * 200,
             )
 
     async def _forward_transcription(stt_stream, participant, track):

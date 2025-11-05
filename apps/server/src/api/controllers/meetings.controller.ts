@@ -15,7 +15,18 @@ export const startMeeting = async (c: Context) => {
     const userId = c.get('userId')
     const body = await c.req.json()
 
-    const { groupId, name } = startMeetingSchema.parse(body)
+    const validation = startMeetingSchema.safeParse(body)
+    if (!validation.success) {
+      return c.json(
+        {
+          success: false,
+          error: validation.error.errors[0].message,
+        },
+        400
+      )
+    }
+
+    const { groupId, name } = validation.data
 
     const meetingService = createMeetingService(db, livekit)
     const result = await meetingService.startMeeting(groupId, userId, name)
@@ -36,6 +47,7 @@ export const startMeeting = async (c: Context) => {
       201
     )
   } catch (error: any) {
+    console.error('Start meeting error:', error)
     return c.json(
       {
         success: false,
@@ -63,9 +75,10 @@ export const endMeeting = async (c: Context) => {
 
     return c.json({
       success: true,
-      data: meeting,
+      data: { meeting },
     })
   } catch (error: any) {
+    console.error('End meeting error:', error)
     return c.json(
       {
         success: false,
@@ -113,7 +126,7 @@ export const getMeeting = async (c: Context) => {
 
     return c.json({
       success: true,
-      data: meeting,
+      data: { meeting },
     })
   } catch (error: any) {
     return c.json(
@@ -138,7 +151,7 @@ export const getActiveMeeting = async (c: Context) => {
 
     return c.json({
       success: true,
-      data: meeting,
+      data: meeting ? { meeting } : null,
     })
   } catch (error: any) {
     return c.json(

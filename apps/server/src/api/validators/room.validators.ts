@@ -23,6 +23,12 @@ type RemoveParticipant = {
   participantId: string
 }
 
+const isValidMeetingId = (id: string): boolean => {
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  const isShortCode = id.length === 26 && isValidMeetingCode(id)
+  return isUUID || isShortCode
+}
+
 export const createRoomValidator = (body: CreateRoom) => {
   const schema = z.object({
     name: z.string().min(2).max(100),
@@ -34,8 +40,8 @@ export const createRoomValidator = (body: CreateRoom) => {
 
 export const joinRoomValidator = (body: JoinRoom) => {
   const schema = z.object({
-    meetingId: z.string().length(26).refine(isValidMeetingCode, {
-      message: 'Invalid meeting code format',
+    meetingId: z.string().min(1).refine(isValidMeetingId, {
+      message: 'Invalid meeting ID format (expected UUID or short code)',
     }),
   })
 
@@ -44,8 +50,8 @@ export const joinRoomValidator = (body: JoinRoom) => {
 
 export const leaveRoomValidator = (params: LeaveRoom) => {
   const schema = z.object({
-    meetingId: z.string().length(26).refine(isValidMeetingCode, {
-      message: 'Invalid meeting code format',
+    meetingId: z.string().min(1).refine(isValidMeetingId, {
+      message: 'Invalid meeting ID format (expected UUID or short code)',
     }),
   })
 
@@ -54,8 +60,8 @@ export const leaveRoomValidator = (params: LeaveRoom) => {
 
 export const endRoomValidator = (params: EndRoom) => {
   const schema = z.object({
-    meetingId: z.string().length(26).refine(isValidMeetingCode, {
-      message: 'Invalid meeting code format',
+    meetingId: z.string().min(1).refine(isValidMeetingId, {
+      message: 'Invalid meeting ID format (expected UUID or short code)',
     }),
   })
 
@@ -64,8 +70,8 @@ export const endRoomValidator = (params: EndRoom) => {
 
 export const removeParticipantValidator = (params: RemoveParticipant) => {
   const schema = z.object({
-    meetingId: z.string().length(26).refine(isValidMeetingCode, {
-      message: 'Invalid meeting code format',
+    meetingId: z.string().min(1).refine(isValidMeetingId, {
+      message: 'Invalid meeting ID format (expected UUID or short code)',
     }),
     participantId: z.string().uuid(),
   })

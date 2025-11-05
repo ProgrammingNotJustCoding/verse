@@ -356,85 +356,93 @@ export function useLiveKit(options: UseLiveKitOptions) {
               updateParticipants()
             }
           )
-          .on(RoomEvent.DataReceived, (payload, participant, kind, topic) => {
-            const decoder = new TextDecoder()
-            const data = decoder.decode(payload)
+          .on(
+            RoomEvent.DataReceived,
+            (
+              payload: Uint8Array,
+              participant: RemoteParticipant | undefined,
+              kind: any,
+              topic?: string
+            ) => {
+              const decoder = new TextDecoder()
+              const data = decoder.decode(payload)
 
-            log('📦 Data received:', {
-              topic,
-              participant: participant?.identity,
-              kind,
-              dataLength: data.length,
-            })
+              log('📦 Data received:', {
+                topic,
+                participant: participant?.identity,
+                kind,
+                dataLength: data.length,
+              })
 
-            if (topic === 'lk.transcription') {
-              try {
-                const transcriptionData = JSON.parse(data)
-                log('📝 Transcription data parsed:', transcriptionData)
+              if (topic === 'lk.transcription') {
+                try {
+                  const transcriptionData = JSON.parse(data)
+                  log('📝 Transcription data parsed:', transcriptionData)
 
-                const speakerIdentity = transcriptionData.participant_identity
+                  const speakerIdentity = transcriptionData.participant_identity
 
-                const room = roomRef.current
-                let speakerName = 'Unknown'
+                  const room = roomRef.current
+                  let speakerName = 'Unknown'
 
-                if (room) {
-                  if (speakerIdentity === room.localParticipant.identity) {
-                    speakerName = room.localParticipant.name || 'You'
-                  } else {
-                    const speakerParticipant = room.remoteParticipants.get(speakerIdentity)
-                    if (speakerParticipant) {
-                      speakerName = speakerParticipant.name || speakerParticipant.identity
+                  if (room) {
+                    if (speakerIdentity === room.localParticipant.identity) {
+                      speakerName = room.localParticipant.name || 'You'
+                    } else {
+                      const speakerParticipant = room.remoteParticipants.get(speakerIdentity)
+                      if (speakerParticipant) {
+                        speakerName = speakerParticipant.name || speakerParticipant.identity
+                      }
                     }
                   }
+
+                  const transcription: Transcription = {
+                    id: `${Date.now()}-${speakerIdentity}`,
+                    participantIdentity: speakerIdentity,
+                    participantName: speakerName,
+                    text: transcriptionData.text || data,
+                    isFinal: transcriptionData.final === true,
+                    timestamp: Date.now(),
+                  }
+
+                  log('✅ Transcription created:', {
+                    id: transcription.id,
+                    speaker: speakerName,
+                    text: transcription.text.substring(0, 100),
+                    isFinal: transcription.isFinal,
+                  })
+
+                  setTranscriptions(prev => {
+                    const filtered = prev.filter(t => t.id !== transcription.id)
+                    const newTranscriptions = [...filtered, transcription]
+                    log('📊 Transcriptions state updated. Total:', newTranscriptions.length)
+                    return newTranscriptions
+                  })
+                  return
+                } catch (err) {
+                  logError('❌ Failed to parse transcription data:', err)
                 }
+              }
 
-                const transcription: Transcription = {
-                  id: `${Date.now()}-${speakerIdentity}`,
-                  participantIdentity: speakerIdentity,
-                  participantName: speakerName,
-                  text: transcriptionData.text || data,
-                  isFinal: transcriptionData.final === true,
-                  timestamp: Date.now(),
+              try {
+                const parsed = JSON.parse(data)
+
+                if (parsed.type === 'chat') {
+                  const chatMessage: ChatMessage = {
+                    id: `${Date.now()}-${participant?.identity || 'unknown'}`,
+                    participantIdentity: participant?.identity || 'unknown',
+                    participantName: participant?.identity || 'Unknown',
+                    message: parsed.message,
+                    timestamp: Date.now(),
+                    isLocal: false,
+                  }
+                  log('Chat message received:', chatMessage)
+                  setChatMessages(prev => [...prev, chatMessage])
                 }
-
-                log('✅ Transcription created:', {
-                  id: transcription.id,
-                  speaker: speakerName,
-                  text: transcription.text.substring(0, 100),
-                  isFinal: transcription.isFinal,
-                })
-
-                setTranscriptions(prev => {
-                  const filtered = prev.filter(t => t.id !== transcription.id)
-                  const newTranscriptions = [...filtered, transcription]
-                  log('📊 Transcriptions state updated. Total:', newTranscriptions.length)
-                  return newTranscriptions
-                })
-                return
               } catch (err) {
-                logError('❌ Failed to parse transcription data:', err)
+                logError('Failed to parse data packet:', err)
               }
             }
-
-            try {
-              const parsed = JSON.parse(data)
-
-              if (parsed.type === 'chat') {
-                const chatMessage: ChatMessage = {
-                  id: `${Date.now()}-${participant?.identity || 'unknown'}`,
-                  participantIdentity: participant?.identity || 'unknown',
-                  participantName: participant?.identity || 'Unknown',
-                  message: parsed.message,
-                  timestamp: Date.now(),
-                  isLocal: false,
-                }
-                log('Chat message received:', chatMessage)
-                setChatMessages(prev => [...prev, chatMessage])
-              }
-            } catch (err) {
-              logError('Failed to parse data packet:', err)
-            }
-          })
+          )
 
         log('Connecting to LiveKit server...')
         await room.connect(serverUrl, token)
