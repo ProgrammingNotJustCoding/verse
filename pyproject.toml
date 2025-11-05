@@ -9,5 +9,4 @@ dependencies = [
     "livekit-plugins-deepgram",
     "python-dotenv",
     "confluent-kafka",
-    "psycopg2-binary",
 ]
