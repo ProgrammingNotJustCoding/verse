@@ -1,5 +1,6 @@
 include:
   - ./compose/coturn/compose.yaml
+  - ./compose/kafka/compose.yaml
   - ./compose/livekit/compose.yaml
   - ./compose/minio/compose.yaml
   - ./compose/postgres/compose.yaml

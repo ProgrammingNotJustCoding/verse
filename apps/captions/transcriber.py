@@ -10,41 +10,64 @@ load_dotenv()
 
 logger = logging.getLogger("transcriber")
 
+# Initialize Deepgram STT
+deepgram_stt = deepgram.STT()
+
 
 async def transcribe_track(
-    participant: rtc.RemoteParticipant,
-    track: rtc.Track,
+    audio_track: rtc.RemoteAudioTrack,
     room: rtc.Room,
+    participant: rtc.RemoteParticipant,
+    kafka_producer,
 ):
-    stt_provider = deepgram.STT()
-    audio_stream = rtc.AudioStream(track)
-    stt_stream = stt_provider.stream()
-
-    async def _forward(ev: stt.SpeechEvent):
-        alt = ev.alternatives[0]
-        if ev.type == stt.SpeechEventType.INTERIM_TRANSCRIPT:
-            print(f"[{participant.identity}] {alt.text}", end="\r")
-        elif ev.type == stt.SpeechEventType.FINAL_TRANSCRIPT:
-            print(f"\n[{participant.identity}]: {alt.text}\n")
-            await publish_transcript(
-                room=room,
-                participant=participant,
-                track_sid=track.sid,
-                text=alt.text,
-                timestamp=asyncio.get_event_loop().time(),
-            )
-
-    async def _forward_transcription(stt_stream, participant, track):
-        async for ev in stt_stream:
-            await _forward(ev)
-
-    stt_task = asyncio.create_task(
-        _forward_transcription(stt_stream, participant, track)
-    )
-
+    logger.info(f"Audio track subscribed – {audio_track.sid}")
+    
+    audio_stream = rtc.AudioStream(audio_track)
+    stt_stream = deepgram_stt.stream()
+    
     try:
-        async for frame in audio_stream:
-            stt_stream.push_frame(frame.frame)
+        async def process_audio():
+            """Process audio frames and push to STT"""
+            async for frame in audio_stream:
+                if stt_stream.closed:
+                    logger.warning("STT stream closed, stopping audio processing")
+                    break
+                try:
+                    stt_stream.push_frame(frame.frame)
+                except RuntimeError as e:
+                    if "is closed" in str(e):
+                        logger.warning("STT stream closed while pushing frame")
+                        break
+                    raise
+        
+        async def process_transcriptions():
+            """Process transcription events"""
+            async for event in stt_stream:
+                if event.alternatives:
+                    text = event.alternatives[0].text
+                    if text.strip():
+                        logger.info(f"Transcription: {text}")
+                        await publish_transcript(
+                            room=room,
+                            participant=participant,
+                            track_sid=audio_track.sid,
+                            text=text,
+                            timestamp=event.end_time,
+                        )
+        
+        # Run both tasks concurrently
+        await asyncio.gather(
+            process_audio(),
+            process_transcriptions(),
+            return_exceptions=True
+        )
+    
+    except Exception as e:
+        logger.error(f"Error in transcription: {e}", exc_info=True)
     finally:
-        await stt_stream.aclose()
-        stt_task.cancel()
+        # Ensure proper cleanup
+        try:
+            await stt_stream.aclose()
+        except:
+            pass
+        logger.info(f"Transcription ended for track {audio_track.sid}")

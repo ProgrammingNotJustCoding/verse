@@ -448,8 +448,10 @@ export function useLiveKit(options: UseLiveKitOptions) {
               } catch (err) {
                 logError('Failed to parse data packet:', err)
               }
+            } catch (err) {
+              logError('Failed to parse data packet:', err)
             }
-          )
+          }) 
 
         log('Connecting to LiveKit server...')
         await room.connect(serverUrl, token)

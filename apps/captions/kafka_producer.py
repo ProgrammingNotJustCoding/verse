@@ -13,7 +13,7 @@ class KafkaProducer:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
+            bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
             cls._producer = Producer(
                 {
                     "bootstrap.servers": bootstrap,

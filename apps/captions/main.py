@@ -5,6 +5,8 @@ from livekit import rtc
 from livekit.agents import JobContext, WorkerOptions, cli, AutoSubscribe
 
 from .transcriber import transcribe_track
+from .kafka_producer import KafkaProducer
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("caption-agent")
@@ -12,6 +14,9 @@ logger = logging.getLogger("caption-agent")
 
 async def entrypoint(job: JobContext):
     logger.info(f"Connecting to room: {job.room.name}")
+    
+    # Initialize Kafka producer (singleton pattern)
+    kafka_producer = KafkaProducer()
 
     @job.room.on("track_subscribed")
     def on_track_subscribed(
@@ -21,7 +26,9 @@ async def entrypoint(job: JobContext):
     ):
         if track.kind == rtc.TrackKind.KIND_AUDIO:
             logger.info(f"Audio track subscribed – {participant.identity}")
-            asyncio.create_task(transcribe_track(participant, track, job.room))
+            asyncio.create_task(
+                transcribe_track(track, job.room, participant, kafka_producer)
+            )
 
     @job.room.on("track_unsubscribed")
     def on_track_unsubscribed(*args):
